@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>Demo</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.1/mapbox-gl.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.1/mapbox-gl.css' rel='stylesheet' />
+
+    <link href="https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.min.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js"></script>
+
+    <script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
+    <script src="http://d3js.org/d3.v4.js"></script>
+
+    <style>
+        body { margin:0; padding:0; width:100%; height:100%;}
+        #map { position:absolute; top:0; bottom:0; width:100%; }
+
+        #viz-selector {
+            position: absolute;
+            z-index: 1;
+            top: 5px;
+            right: 5px;
+        }
+
+        .zoom-info {
+            z-index: 10;
+            position: absolute;
+            bottom: 17px;
+            right: 0;
+            padding: 5px;
+            width: auto;
+            height: auto;
+            font-size: 12px;
+            color: #000;
+        }
+        .loading-map {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            color: #FFF;
+            background-color: #000;
+            text-align: center;
+            opacity: 0.5;
+            font-size: 45px;
+        }
+        .loading-map.off{
+            opacity: 0;
+            -o-transition: all .5s ease;
+            -webkit-transition: all .5s ease;
+            -moz-transition: all .5s ease;
+            -ms-transition: all .5s ease;
+            transition: all ease .5s;
+            visibility:hidden;
+        }
+        .middle-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .middle-center * {
+            display: block;
+            padding: 5px;
+        }
+
+        #menu {
+          left: 0;
+          top: 0;
+          -o-transition: all .5s ease;
+          -webkit-transition: all .5s ease;
+          -moz-transition: all .5s ease;
+          -ms-transition: all .5s ease;
+          transition: all ease .5s;
+        }
+
+        #menu.off {
+          left: -360px;
+          -o-transition: all .5s ease;
+          -webkit-transition: all .5s ease;
+          -moz-transition: all .5s ease;
+          -ms-transition: all .5s ease;
+          transition: all ease .5s;
+        }
+        #hide-arrow {
+          -o-transition: all .5s ease;
+          -webkit-transition: all .5s ease;
+          -moz-transition: all .5s ease;
+          -ms-transition: all .5s ease;
+          transition: all ease .5s;
+        }
+
+        #hide-arrow.off {
+          transform: rotate(-180deg);
+        }
+
+        #btn-hide {
+          position: absolute;
+          top: 0;
+          height: 35px;
+          font-size: 35px;
+          line-height: 35px;
+          vertical-align: middle;
+          right: -35px;
+          color: #28333b;
+          background-color: #fff;
+        }
+
+        #btn-hide:hover {
+          color: #fff;
+          background-color: #28333b;
+          cursor: pointer;
+        }
+
+        .line-red {
+          fill: none;
+          stroke: red;
+          stroke-width: 1.5px;
+        }
+        .line-green {
+          fill: none;
+          stroke: green;
+          stroke-width: 1.5px;
+        }
+        .line-blue {
+          fill: none;
+          stroke: blue;
+          stroke-width: 1.5px;
+        }
+
+        @media(max-width: 767px) {
+
+          #menu.off {
+            left: -240px;
+            -o-transition: all .5s ease;
+            -webkit-transition: all .5s ease;
+            -moz-transition: all .5s ease;
+            -ms-transition: all .5s ease;
+            transition: all ease .5s;
+          }
+
+          .mapboxgl-ctrl-attrib {
+              font-size: 10px;
+          }
+        }
+
+    </style>
+</head>
+<body>
+
+<div id='viz-selector' class='toggle-group bg-gray-faint' style="line-height: 0">
+  <label class='toggle-container'>
+    <input value="raster" checked="checked" name='toggle-viz' type='radio' />
+    <div title='Raster Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w24 h24'><use xlink:href='#icon-raster'/></svg></div>
+  </label>
+  <label class='toggle-container'>
+    <input value="point" name='toggle-viz' type='radio' />
+    <div title='Point Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w24 h24'><use xlink:href='#icon-circle'/></svg></div>
+  </label>
+  <label class='toggle-container'>
+    <input value="polygon" name='toggle-viz' type='radio' />
+    <div title='3D Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w24 h24'><use xlink:href='#icon-extrusion'/></div>
+  </label>
+</div>
+
+<div id='menu' class='flex-child w240 w360-ml absolute bg-white z2 px12 py12 off'>
+
+  <div id='menu-content' class='relative'>
+
+    <!-- Band Selection -->
+    <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers</div>
+    <div class='select-container wmax-full'>
+      <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'>
+      </select>
+      <div class='select-arrow color-black'></div>
+    </div>
+
+    <!-- Histogram -->
+    <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
+    <div id="histogram" class="w-full h120 h240-ml relative"></div>
+
+
+    <!-- Histogram Cut -->
+    <div class='txt-h5 mt6 mb6 color-black'>Histogram Cut</div>
+    <div class='px6 py6'>
+      <input id="minCut" class='input input--s wmax60 inline-block align-center color-black' />
+      <input id="maxCut" class='input input--s wmax60 inline-block align-center color-black ml12' />
+      <button id="updateCuts" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black ml12'>Apply</button>
+    </div>
+
+    <!-- Color Map -->
+    <div id='colormap-section'>
+      <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-palette'/></svg> Color Map</div>
+      <div class='select-container wmax-full'>
+        <select id='colormap-selector' class='select select--s select--stroke wmax-full color-black'>
+          <option value='b&w'>Black and White</option>
+          <option value='cfastie'>cfastie</option>
+          <option value='rplumbo'>rplumbo</option>
+          <option value='schwarzwald'>schwarzwald (elevation)</option>
+        </select>
+        <div class='select-arrow color-black'></div>
+      </div>
+    </div>
+    <!-- V Exag -->
+    <div id='extrusion-section' class='none'>
+      <div class='txt-h5 mt6 mb6 color-black'>Vercital Exageration</div>
+      <div class='px6 py6'>
+        <input id="ex-value" class='input input--s wmax60 inline-block align-center color-black' value='1' />
+        <button id="updateExag" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black ml12'>Apply</button>
+      </div>
+    </div>
+
+  </div>
+
+  <button id='btn-hide'><svg id='hide-arrow' class='icon'><use xlink:href='#icon-arrow-right'/></svg></button>
+</div>
+
+<div id='map'>
+  <div id='loader' class="loading-map z3">
+    <div class="middle-center">
+      <div class="round animation-spin animation--infinite animation--speed-1">
+        <svg class='icon icon--l inline-block'><use xlink:href='#icon-satellite'/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="zoom-info"><span id="zoom"></span></div>
+</div>
+
+<script>
+var scope = {
+  metadata: {},
+  config: {}
+}
+
+mapboxgl.accessToken = '{{ token }}'
+const layerName = '{{ layername }}'
+const api_endpoint = '{{ endpoint }}'
+
+let style
+if (mapboxgl.accessToken !== '') {
+  style = 'mapbox://styles/mapbox/{{ mapbox_style }}-v9'
+} else {
+  style = { version: 8, sources: {}, layers: [] }
+}
+
+var map = new mapboxgl.Map({
+    container: 'map',
+    style: style,
+    center: [0, 0],
+    zoom: 1
+})
+
+map.on('zoom', function (e) {
+  const z = (map.getZoom()).toString().slice(0, 6)
+  document.getElementById('zoom').textContent = z
+})
+
+const switchViz = (vizType) => {
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getSource('raster')) map.removeSource('raster')
+
+  if (map.getLayer('mvt')) map.removeLayer('mvt')
+  if (map.getSource('mvt')) { map.removeSource('mvt') }
+
+  // TODO 3b/raster
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const indexes = active_layer.getAttribute('data-indexes')
+  const stats = scope.metadata.statistics[indexes]
+  const minV = scope.config[indexes].set.min
+  const maxV = scope.config[indexes].set.max  
+  addHisto1Band(stats)
+
+  switch (vizType) {
+    case 'raster':
+      const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
+
+      let url = `${api_endpoint}/tilejson.json?tile_format=png&indexes=${indexes}&rescale=${minV},${maxV}`
+      if (cmap.value !== 'b&w') url += `&color_map=${cmap.value}`
+      map.addSource('raster', {
+        type: 'raster',
+        url: url
+      })
+      addLayer(vizType)
+      break
+
+    case 'point':
+      map.addSource('mvt', {
+        type: 'vector',
+        url: `${api_endpoint}/tilejson.json?tile_format=pbf&feature_type=point`
+      })
+      addLayer(vizType)
+      break
+
+    case 'polygon':
+      map.addSource('mvt', {
+        type: 'vector',
+        url: `${api_endpoint}/tilejson.json?tile_format=pbf&feature_type=polygon`
+      })
+      addLayer(vizType)
+      break
+
+    default:
+      throw new Error(`Invalid ${vizType}`)
+  }
+}
+
+const addLayer = (layerType) => {
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getLayer('mvt')) map.removeLayer('mvt')
+
+  // TODO 3b/raster
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const indexes = active_layer.getAttribute('data-indexes')
+  const stats = scope.metadata.statistics[indexes]
+  const sMin = scope.config[indexes].set.min
+  const sMax = scope.config[indexes].set.max
+  addHisto1Band()
+
+  const propName = active_layer.value
+  const exag = parseFloat(document.getElementById('ex-value').value)
+
+  switch (layerType) {
+    case 'raster':
+      map.addLayer({
+        id: 'raster',
+        type: 'raster',
+        source: 'raster'
+      })
+      break
+
+    case 'point':
+      map.addLayer({
+        id: 'mvt',
+        source: 'mvt',
+        'source-layer': layerName,
+        type: 'circle',
+        paint: {
+          'circle-color': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', propName]],
+            sMin, '#3700f0',
+            sMax, '#ed0707'
+          ],
+          'circle-radius': {
+            'base': 1,
+            'stops': [
+              [0, 10],
+              [9, 5]
+            ]
+          }
+        }
+      })
+
+      break
+
+    case 'polygon':
+      map.addLayer({
+        id: 'mvt',
+        source: 'mvt',
+        'source-layer': layerName,
+        type: 'fill-extrusion',
+        paint: {
+          'fill-extrusion-opacity': 1,
+          'fill-extrusion-height': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', propName]],
+            sMin, 0,
+            sMax, sMax * exag
+          ],
+          'fill-extrusion-color': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', propName]],
+            sMin, '#3700f0',
+            sMax, '#ed0707'
+          ]
+        }
+      })
+
+      break
+
+    default:
+      throw new Error(`Invalid ${layerType}`)
+  }
+}
+
+const addHisto1Band = () => {
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const indexes = active_layer.getAttribute('data-indexes')
+  const stats = scope.metadata.statistics[indexes]
+
+  const counts = stats.histogram[0]
+  const values = stats.histogram[1]
+  const bbox = d3.select('#histogram').node().getBoundingClientRect()
+
+  // set the dimensions and margins of the graph
+  const margin = { top: 10, right: 30, bottom: 30, left: 40 }
+  const width = bbox.width - margin.left - margin.right
+  const height = bbox.height - margin.top - margin.bottom
+
+  d3.select('#histogram').selectAll('*').remove()
+  // append the svg object to the body of the page
+  var svg = d3.select('#histogram')
+    .append('svg')
+    .attr('width', width + margin.left + margin.right)
+    .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+
+  const min = scope.config[indexes].set.min
+  const max = scope.config[indexes].set.max
+
+  // X axis: scale and draw:
+  var x = d3.scaleLinear()
+    .domain([min, max])
+    .range([0, width])
+
+  svg.append('g')
+    .attr('transform', 'translate(0,' + height + ')')
+    .call(d3.axisBottom(x))
+
+  // Y axis: scale and draw:
+  var y = d3.scaleLinear().range([height, 0])
+  y.domain([0, d3.max(counts)])
+  svg.append('g').call(d3.axisLeft(y))
+
+  const bins = []
+  for (var i = 0; i < counts.length; i++) {
+    bins.push({
+      count: counts[i],
+      value: values[i]
+    })
+  }
+
+  // append the bar rectangles to the svg element
+  svg.selectAll('rect')
+    .data(bins)
+    .enter()
+    .append('rect')
+    .attr('x', 1)
+    .attr('transform', d => { return 'translate(' + x(d.value) + ',' + y(d.count) + ')' })
+    .attr('width', 10)
+    .attr('height', d => { return height - y(d.count) })
+    .style('fill', '#69b3a2')
+}
+
+document.getElementById('btn-hide').addEventListener('click', () => {
+  document.getElementById('hide-arrow').classList.toggle('off')
+  document.getElementById('menu').classList.toggle('off')
+})
+
+document.getElementById('viz-selector').addEventListener('change', (e) => {
+  switch (e.target.value) {
+    case 'raster':
+      document.getElementById('colormap-section').classList.remove('none')
+      document.getElementById('extrusion-section').classList.add('none')
+      break
+
+    case 'point':
+      document.getElementById('colormap-section').classList.add('none')
+      document.getElementById('extrusion-section').classList.add('none')
+      break
+
+    case 'polygon':
+      document.getElementById('colormap-section').classList.add('none')
+      document.getElementById('extrusion-section').classList.remove('none')
+      break
+
+    default:
+  }
+  switchViz(e.target.value)
+})
+
+// MVT have already all the layers while for raster we need to fetch new tiles
+const updateViz = (newViz) => {
+  if (newViz === "raster") {
+    switchViz(document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value)
+  } else {
+    addLayer(newViz)
+  }
+}
+
+document.getElementById('layer-selector').addEventListener('change', () => {
+  const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const indexes = active_layer.getAttribute('data-indexes')
+  document.getElementById('minCut').value = scope.config[indexes].set.min.toString().slice(0, 6)
+  document.getElementById('maxCut').value = scope.config[indexes].set.max.toString().slice(0, 6)
+  updateViz(newViz)
+})
+
+document.getElementById('updateCuts').addEventListener('click', () => {
+  const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
+
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const indexes = active_layer.getAttribute('data-indexes')
+  scope.config[indexes].set.min = parseFloat(document.getElementById('minCut').value)
+  scope.config[indexes].set.max = parseFloat(document.getElementById('maxCut').value)
+
+  const minV = scope.config[indexes].set.min
+  const maxV = scope.config[indexes].set.max
+
+  fetch(`${api_endpoint}/metadata?histogram_range=${minV},${maxV}&indexes=${indexes}`)
+      .then(res => {
+        if (res.ok) return res.json()
+        throw new Error('Network response was not ok.')
+      })
+      .then(data => {
+        // We just update metadata for the specific Band
+        scope.metadata.statistics[indexes] = data.statistics[indexes]
+        updateViz(newViz)
+      })
+      .catch(err => {
+        console.warn(err)
+      })
+})
+
+document.getElementById('updateExag').addEventListener('click', () => {
+  const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
+  updateViz(newViz)
+})
+
+document.getElementById('colormap-selector').addEventListener('change', () => {
+  const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
+  updateViz(newViz)
+})
+
+const addAOI = (bounds) => {
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [turf.bboxPolygon(bounds)]
+  }
+
+  map.addSource('aoi', {
+    'type': 'geojson',
+    'data': geojson
+  })
+
+  map.addLayer({
+    id: 'aoi-polygon',
+    type: 'line',
+    source: 'aoi',
+    layout: {
+      'line-cap': 'round',
+      'line-join': 'round'
+    },
+    paint: {
+      'line-color': '#3bb2d0',
+      'line-width': 1
+    }
+  })
+  return
+}
+
+map.on('load', () => {
+  map.on('mousemove', (e) => {
+    if (!map.getLayer('mvt')) return
+    const mouseRadius = 1
+    const feature = map.queryRenderedFeatures([
+      [e.point.x - mouseRadius, e.point.y - mouseRadius],
+      [e.point.x + mouseRadius, e.point.y + mouseRadius]
+    ], { layers: ['mvt'] })[0]
+    if (feature) {
+      map.getCanvas().style.cursor = 'pointer'
+    } else {
+      map.getCanvas().style.cursor = 'inherit'
+    }
+  })
+
+  map.on('click', 'mvt', (e) => {
+    let html = '<table><tr><th>property</th><th>value</th></tr>'
+    Object.entries(e.features[0].properties).forEach(entry => {
+      let key = entry[0]
+      let value = entry[1]
+      if (key !== 'id') html += `<tr><td>${key}</td><td>${value}</td></tr>`
+    })
+    html += `<tr><td>lon</td><td>${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+    html += `<tr><td>lat</td><td>${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+    html += '</table>'
+    new mapboxgl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(html)
+      .addTo(map)
+  })
+
+  // we cannot click on raster layer (mapbox-gl bug)
+  map.on('click', (e) => {
+    if (!map.getLayer('raster')) return
+    const bounds = map.getSource('raster').bounds
+    if (
+      (e.lngLat.lng >= bounds[0] && e.lngLat.lng <= bounds[2]) &&
+      (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
+    ) {
+      const coord = `${e.lngLat.lng},${e.lngLat.lat}`
+      fetch(`${api_endpoint}/point?coordinates=${coord}`)
+        .then(res => {
+          if (res.ok) return res.json()
+          throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+          let html = '<table><tr><th>property</th><th>value</th></tr>'
+          Object.entries(data.value).forEach(entry => {
+            let key = entry[0]
+            let value = entry[1]
+            html += `<tr><td>${key}</td><td>${value}</td></tr>`
+          })
+          html += `<tr><td>lon</td><td>${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+          html += `<tr><td>lat</td><td>${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+          html += '</table>'
+          new mapboxgl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map)
+        })
+        .catch(err => {
+          console.warn(err)
+        })
+    }
+  })
+
+  fetch(`${api_endpoint}/metadata`)
+    .then(res => {
+      if (res.ok) return res.json()
+      throw new Error('Network response was not ok.')
+    })
+    .then(data => {
+      scope.metadata = data
+      console.log(data)
+
+      scope.config = {}
+      Object.entries(scope.metadata.statistics).forEach(entry => {
+        scope.config[entry[0]] = {
+          "init": {"min": entry[1].min, "max": entry[1].max},
+          "set": {"min": entry[1].min, "max": entry[1].max}
+        }
+      })
+  
+      const layerList = document.getElementById('layer-selector')
+      for (var i = 0; i < scope.metadata.band_descriptions.length; i++) {
+        let l = document.createElement('option')
+        l.value = scope.metadata.band_descriptions[i][1]
+        l.setAttribute('data-indexes', scope.metadata.band_descriptions[i][0].toString()) // statistics index is translated to string when encoding to json
+        l.text = scope.metadata.band_descriptions[i][1]
+        layerList.appendChild(l)
+      }
+
+      // remove loader
+      document.getElementById('loader').classList.toggle('off')
+      document.getElementById('hide-arrow').classList.toggle('off')
+      document.getElementById('menu').classList.toggle('off')
+
+      const bounds = scope.metadata.bounds.value
+      map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
+      addAOI(bounds)
+
+      document.getElementById('minCut').value = scope.config['1'].set.min.toString().slice(0, 6)
+      document.getElementById('maxCut').value = scope.config['1'].set.max.toString().slice(0, 6)
+
+      switchViz('raster')
+    })
+    .catch(err => {
+      console.warn(err)
+    })
+})
+
+</script>
+
+</body>
+</html>

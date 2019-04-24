@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  viz:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - GDAL_CACHEMAX=512
+      - VSI_CACHE=TRUE
+      - VSI_CACHE_SIZE=536870912
+      - CPL_TMPDIR=/tmp
+      - GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=YES
+      - GDAL_HTTP_MULTIPLEX=YES
+      - GDAL_HTTP_VERSION=2
+      - PYTHONWARNINGS=ignore
+      - GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
+    volumes:
+      - '.:/local'
+    command: ["rio", "viz", "${file}", "--port", "8000", "--style", "${style}"]
