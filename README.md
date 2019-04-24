@@ -1,7 +1,6 @@
 # rio-viz
 
-[![CircleCI](https://circleci.com/gh/developmentseed/rio-viz.svg?style=svg&circle-token=d5918d6977dbc1d4978614b6b19f0fd982524eb0)](https://circleci.com/gh/developmentseed/rio-viz)
-
+[![CircleCI](https://circleci.com/gh/developmentseed/rio-viz.svg?style=svg&circle-token=4e1d294fbe0e9f1ad874a013434b91d22111b35e)]
 
 Rasterio plugin to visualize Cloud Optimized GeoTIFF in browser.
 
