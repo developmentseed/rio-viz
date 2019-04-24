@@ -19,8 +19,8 @@ with open("rio_viz/__init__.py") as f:
 inst_reqs = ["tornado==4.5.3", "rio-tiler~=1.2", "click", "vtzero", "rio-cogeo"]
 
 extra_reqs = {
-    "test": ["pytest", "pytest-cov"],
-    "dev": ["pytest", "pytest-cov", "pre-commit"],
+    "test": ["mock", "pytest", "pytest-cov"],
+    "dev": ["mock", "pytest", "pytest-cov", "pre-commit"],
 }
 
 ext_options = {"include_dirs": [numpy.get_include()]}
