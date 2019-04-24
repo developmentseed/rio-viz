@@ -11,9 +11,13 @@ Freely adapted from the great [mapbox/rio-glui](github.com/mapbox/rio-glui)
 
 ### Install
 
-```
+```bash
 $ git clone https://github.com/developmentseed/rio-viz.git
 $ cd rio-viz
+
+# python-vtzero will only compile with Cython < 0.29
+$ pip install cython==0.28
+
 $ pip install -e .
 ```
 
