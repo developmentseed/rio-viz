@@ -171,24 +171,29 @@
   <div id='menu-content' class='relative'>
 
     <!-- Band Selection -->
-    <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers</div>
-    <div class='select-container wmax-full'>
-      <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'>
-      </select>
-      <div class='select-arrow color-black'></div>
+    <div id='1band-section'>    
+      <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers</div>
+      <div class='select-container wmax-full'>
+        <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'>
+        </select>
+        <div class='select-arrow color-black'></div>
+      </div>
+    </div>
+    
+    <!-- Histogram -->
+    <div id='histogram-section'>
+      <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
+      <div id="histogram" class="w-full h120 h240-ml relative"></div>
     </div>
 
-    <!-- Histogram -->
-    <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
-    <div id="histogram" class="w-full h120 h240-ml relative"></div>
-
-
     <!-- Histogram Cut -->
-    <div class='txt-h5 mt6 mb6 color-black'>Histogram Cut</div>
-    <div class='px6 py6'>
-      <input id="minCut" class='input input--s wmax60 inline-block align-center color-black' />
-      <input id="maxCut" class='input input--s wmax60 inline-block align-center color-black ml12' />
-      <button id="updateCuts" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black ml12'>Apply</button>
+    <div id='histocuts-section'>
+      <div class='txt-h5 mt6 mb6 color-black'>Histogram Cut</div>
+      <div class='px6 py6'>
+        <input id="minCut" class='input input--s wmax60 inline-block align-center color-black' />
+        <input id="maxCut" class='input input--s wmax60 inline-block align-center color-black ml12' />
+        <button id="updateCuts" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black ml12'>Apply</button>
+      </div>
     </div>
 
     <!-- Color Map -->
@@ -266,19 +271,19 @@ const switchViz = (vizType) => {
   if (map.getSource('mvt')) { map.removeSource('mvt') }
 
   // TODO 3b/raster
-  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-  const indexes = active_layer.getAttribute('data-indexes')
-  const stats = scope.metadata.statistics[indexes]
-  const minV = scope.config[indexes].set.min
-  const maxV = scope.config[indexes].set.max  
-  addHisto1Band(stats)
+  addHisto1Band()
 
   switch (vizType) {
     case 'raster':
-      const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
+      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+      const indexes = active_layer.getAttribute('data-indexes')
+      const minV = scope.config[indexes].set.min
+      const maxV = scope.config[indexes].set.max  
 
       let url = `${api_endpoint}/tilejson.json?tile_format=png&indexes=${indexes}&rescale=${minV},${maxV}`
+      const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
       if (cmap.value !== 'b&w') url += `&color_map=${cmap.value}`
+
       map.addSource('raster', {
         type: 'raster',
         url: url
@@ -573,14 +578,14 @@ map.on('load', () => {
   })
 
   map.on('click', 'mvt', (e) => {
-    let html = '<table><tr><th>property</th><th>value</th></tr>'
+    let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
     Object.entries(e.features[0].properties).forEach(entry => {
       let key = entry[0]
       let value = entry[1]
-      if (key !== 'id') html += `<tr><td>${key}</td><td>${value}</td></tr>`
+      if (key !== 'id') html += `<tr><td>${key}</td><td class="px3 align-r">${value}</td></tr>`
     })
-    html += `<tr><td>lon</td><td>${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
-    html += `<tr><td>lat</td><td>${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+    html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+    html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
     html += '</table>'
     new mapboxgl.Popup()
       .setLngLat(e.lngLat)
@@ -603,14 +608,14 @@ map.on('load', () => {
           throw new Error('Network response was not ok.');
         })
         .then(data => {
-          let html = '<table><tr><th>property</th><th>value</th></tr>'
+          let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
           Object.entries(data.value).forEach(entry => {
             let key = entry[0]
             let value = entry[1]
-            html += `<tr><td>${key}</td><td>${value}</td></tr>`
+            html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
           })
-          html += `<tr><td>lon</td><td>${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
-          html += `<tr><td>lat</td><td>${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+          html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+          html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
           html += '</table>'
           new mapboxgl.Popup()
             .setLngLat(e.lngLat)

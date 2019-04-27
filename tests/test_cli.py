@@ -39,10 +39,30 @@ def test_viz_valid(launch, TileServer):
 
 @patch("rio_viz.server.TileServer")
 @patch("click.launch")
+def test_viz_validMultiple(launch, TileServer):
+    """Should work as expected with multiple path."""
+    TileServer.return_value.get_template_url.return_value = (
+        "http://127.0.0.1:8080/index.html"
+    )
+    TileServer.return_value.start.return_value = True
+
+    launch.return_value = True
+
+    runner = CliRunner()
+    result = runner.invoke(viz, [cog_path, cog_path, cog_path])
+    TileServer.assert_called_once()
+    raster = TileServer.call_args[0][0]
+    assert len(raster.path) == 3
+    assert not result.exception
+    assert result.exit_code == 0
+
+
+@patch("rio_viz.server.TileServer")
+@patch("click.launch")
 def test_viz_valid_style(launch, TileServer):
     """Should work as expected."""
-    TileServer.return_value.get_playround_url.return_value = (
-        "http://127.0.0.1:8080/playground.html"
+    TileServer.return_value.get_template_url.return_value = (
+        "http://127.0.0.1:8080/index.html"
     )
     TileServer.return_value.start.return_value = True
 
@@ -115,7 +135,7 @@ def test_viz_invalidCog(launch, TileServer):
     runner = CliRunner()
     result = runner.invoke(viz, [noncog_path])
     raster = TileServer.call_args[0][0]
-    assert raster.path is not noncog_path
+    assert raster.path[0] is not noncog_path
     TileServer.assert_called_once()
     assert not result.exception
     assert result.exit_code == 0

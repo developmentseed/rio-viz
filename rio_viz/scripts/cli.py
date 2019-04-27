@@ -48,7 +48,7 @@ class MbxTokenType(click.ParamType):
 
 
 @click.command()
-@click.argument("src_path", type=str)
+@click.argument("src_paths", type=str, nargs=-1)
 @click.option(
     "--style",
     type=click.Choice(["satellite", "basic"]),
@@ -64,25 +64,26 @@ class MbxTokenType(click.ParamType):
     help="Pass Mapbox token",
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
-def viz(src_path, style, port, mapbox_token, no_check):
+def viz(src_paths, style, port, mapbox_token, no_check):
     """Rasterio Viz cli."""
     # Check if cog
+    src_paths = list(src_paths)
     with ExitStack() as ctx:
+        for ii, src_path in enumerate(src_paths):
+            if not no_check and not cog_validate(src_path):
+                # create tmp COG
+                click.echo("create temporaty COG")
+                tmp_path = ctx.enter_context(TemporaryRasterFile(src_path))
 
-        if not no_check and not cog_validate(src_path):
-            # create tmp COG
-            click.echo("create temporaty COG")
-            tmp_path = ctx.enter_context(TemporaryRasterFile(src_path))
+                output_profile = cog_profiles.get("deflate")
+                output_profile.update(dict(blockxsize="256", blockysize="256"))
+                config = dict(GDAL_TIFF_OVR_BLOCKSIZE="256")
+                cog_translate(src_path, tmp_path.name, output_profile, config=config)
+                src_paths[ii] = tmp_path.name
 
-            output_profile = cog_profiles.get("deflate")
-            output_profile.update(dict(blockxsize="256", blockysize="256"))
-            config = dict(GDAL_TIFF_OVR_BLOCKSIZE="256")
-            cog_translate(src_path, tmp_path.name, output_profile, config=config)
-            src_path = tmp_path.name
-
-        src_dst = raster.RasterTiles(src_path)
+        src_dst = raster.RasterTiles(src_paths)
         app = server.TileServer(src_dst, token=mapbox_token, style=style, port=port)
         url = app.get_template_url()
         click.launch(url)
-        click.echo("Inspecting {} at {}".format(src_path, url), err=True)
+        click.echo(f"Viewer started at {url}", err=True)
         app.start()

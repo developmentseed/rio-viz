@@ -105,11 +105,16 @@ class InvalidAddress(web.RequestHandler):
 class RasterTileHandler(web.RequestHandler):
     """RasterTiles requests handler."""
 
-    executor = futures.ThreadPoolExecutor(max_workers=16)
+    executor = futures.ThreadPoolExecutor(max_workers=100)
 
     def initialize(self, raster):
         """Initialize tiles handler."""
         self.raster = raster
+
+    def _chunks(self, l, n):
+        """Yield successive n-sized chunks from l."""
+        for i in range(0, len(l), n):
+            yield l[i : i + n]
 
     @run_on_executor
     def _get_tile(
@@ -130,7 +135,11 @@ class RasterTileHandler(web.RequestHandler):
         tile, mask = self.raster.read_tile(z, x, y, indexes=indexes)
 
         if rescale:
-            rescale_arr = (tuple(map(float, rescale.split(","))),) * tile.shape[0]
+            rescale_arr = list(map(float, rescale.split(",")))
+            rescale_arr = list(self._chunks(rescale_arr, 2))
+            if len(rescale_arr) != tile.shape[0]:
+                rescale_arr = ((rescale_arr[0]),) * tile.shape[0]
+
             for bdx in range(tile.shape[0]):
                 tile[bdx] = numpy.where(
                     mask,
@@ -174,7 +183,7 @@ class RasterTileHandler(web.RequestHandler):
 class MVTileHandler(web.RequestHandler):
     """MVTileHandler requests handler."""
 
-    executor = futures.ThreadPoolExecutor(max_workers=50)
+    executor = futures.ThreadPoolExecutor(max_workers=100)
 
     def initialize(self, raster):
         """Initialize tiles handler."""
@@ -190,7 +199,7 @@ class MVTileHandler(web.RequestHandler):
 
     @gen.coroutine
     def get(self, z: int, x: int, y: int):
-        """Returns tile data and header."""
+        """Return tile data and header."""
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Methods", "GET")
         self.set_header("Content-Type", "application/x-protobuf")
@@ -282,12 +291,8 @@ class PointHandler(web.RequestHandler):
         if not coordinates:
             raise web.HTTPError(404)
 
-        indexes = self.get_argument("indexes", None)
-        if indexes:
-            indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
-
         coordinates = list(map(float, coordinates.split(",")))
-        self.write(json.dumps(self.raster.point(coordinates, indexes=indexes)))
+        self.write(json.dumps(self.raster.point(coordinates)))
 
 
 class Template(web.RequestHandler):
@@ -315,7 +320,7 @@ class IndexTemplate(Template):
         params = dict(
             endpoint=self.endpoint,
             token=self.token,
-            layername=os.path.basename(self.src_path),
+            layername=os.path.basename(self.src_path[0]),
             mapbox_style=self.style,
         )
         self.render("templates/index.html", **params)

@@ -4,6 +4,10 @@ from typing import Tuple, Union
 from typing.io import BinaryIO
 
 import os
+from functools import partial
+from concurrent import futures
+
+import numpy
 
 import mercantile
 import rasterio
@@ -15,37 +19,87 @@ from rio_tiler.mercator import get_zooms
 from .raster_to_mvt import mvtEncoder
 
 
+def _get_info(src_path):
+    bname = os.path.basename(src_path).split(os.path.extsep)[0]
+    with rasterio.open(src_path) as src_dst:
+        bounds = transform_bounds(
+            *[src_dst.crs, "epsg:4326"] + list(src_dst.bounds), densify_pts=21
+        )
+        center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
+        minzoom, maxzoom = get_zooms(src_dst)
+
+        def _get_name(ix):
+            name = src_dst.descriptions[ix - 1]
+            if not name:
+                name = f"{bname}_band{ix}"
+            return name
+
+        band_descriptions = [_get_name(ix) for ix in src_dst.indexes]
+
+    return bounds, center, minzoom, maxzoom, band_descriptions
+
+
 class RasterTiles(object):
     """Raster tiles object."""
 
     def __init__(self, src_path: str):
         """Initialize RasterTiles object."""
+        if isinstance(src_path, str):
+            src_path = [src_path]
+        elif isinstance(src_path, tuple):
+            src_path = list(src_path)
+
         self.path = src_path
-        self.layer_name = os.path.basename(self.path)
+        self.layer_name = os.path.basename(self.path[0])
 
-        with rasterio.open(self.path) as src_dst:
-            self.bounds = transform_bounds(
-                *[src_dst.crs, "epsg:4326"] + list(src_dst.bounds), densify_pts=21
-            )
-            self.center = [
-                (self.bounds[0] + self.bounds[2]) / 2,
-                (self.bounds[1] + self.bounds[3]) / 2,
-            ]
-            self.minzoom, self.maxzoom = get_zooms(src_dst)
+        with futures.ThreadPoolExecutor() as executor:
+            responses = list(executor.map(_get_info, self.path))
 
-            def _get_name(ix):
-                name = src_dst.descriptions[ix - 1]
-                if not name:
-                    name = f"band{ix}"
-                return name
-
-            self.band_descriptions = [_get_name(ix) for ix in src_dst.indexes]
+        self.bounds = responses[0][0]
+        self.center = responses[0][1]
+        self.minzoom = responses[0][2]
+        self.maxzoom = responses[0][3]
+        if len(self.path) != 1:
+            self.band_descriptions = [r[4][0] for r in responses]
+        else:
+            self.band_descriptions = responses[0][4]
 
     def read_tile(
-        self, z: int, x: int, y: int, tilesize: int = 256, indexes: Tuple[int] = None
-    ) -> BinaryIO:
+        self,
+        z: int,
+        x: int,
+        y: int,
+        tilesize: int = 256,
+        resampling_method: str = "bilinear",
+        indexes: Tuple[int] = None,
+    ) -> [numpy.ndarray, numpy.ndarray]:
         """Read raster tile data and mask."""
-        return main_tiler(self.path, x, y, z, tilesize=tilesize, indexes=indexes)
+        if isinstance(indexes, int):
+            indexes = [indexes]
+        elif isinstance(indexes, tuple):
+            indexes = list(indexes)
+
+        if len(self.path) != 1 and indexes:
+            path = [self.path[ii - 1] for ii in indexes]
+            indexes = None
+        else:
+            path = self.path
+
+        _tiler = partial(
+            main_tiler,
+            tile_x=x,
+            tile_y=y,
+            tile_z=z,
+            tilesize=tilesize,
+            indexes=indexes,
+            resampling_method=resampling_method,
+        )
+        with futures.ThreadPoolExecutor() as executor:
+            data, masks = zip(*list(executor.map(_tiler, path)))
+            data = numpy.concatenate(data)
+            mask = numpy.all(masks, axis=0).astype(numpy.uint8) * 255
+
+        return data, mask
 
     def read_tile_mvt(
         self,
@@ -60,8 +114,8 @@ class RasterTiles(object):
         mercator_tile = mercantile.Tile(x=x, y=y, z=z)
         quadkey = mercantile.quadkey(*mercator_tile)
 
-        tile, mask = main_tiler(
-            self.path, x, y, z, tilesize=tilesize, resampling_method=resampling_method
+        tile, mask = self.read_tile(
+            z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )
 
         return mvtEncoder(
@@ -73,22 +127,29 @@ class RasterTiles(object):
             feature_type=feature_type,
         )
 
-    def point(
-        self, coordinates: Tuple[float, float], indexes: Tuple[int] = None
-    ) -> dict:
-        """Read point value."""
-        with rasterio.open(self.path) as src_dst:
-            indexes = indexes if indexes is not None else src_dst.indexes
+    def _get_point(self, src_path: str, coordinates: Tuple[float, float]) -> dict:
+        with rasterio.open(src_path) as src_dst:
             lon_srs, lat_srs = transform(
                 "EPSG:4326", src_dst.crs, [coordinates[0]], [coordinates[1]]
             )
-            results = list(src_dst.sample([(lon_srs[0], lat_srs[0])], indexes=indexes))[
-                0
-            ]
+            return list(
+                src_dst.sample([(lon_srs[0], lat_srs[0])], indexes=src_dst.indexes)
+            )[0].tolist()
+
+    def point(self, coordinates: Tuple[float, float]) -> dict:
+        """Read point value."""
+        _points = partial(self._get_point, coordinates=coordinates)
+        with futures.ThreadPoolExecutor() as executor:
+            results = list(executor.map(_points, self.path))
+
+        if len(self.path) != 1:
+            results = [r[0] for r in results]
+        else:
+            results = results[0]
 
         return {
             "coordinates": coordinates,
-            "value": {b: r for b, r in zip(self.band_descriptions, results.tolist())},
+            "value": {b: r for b, r in zip(self.band_descriptions, results)},
         }
 
     def tile_exists(self, z: int, x: int, y: int) -> bool:
@@ -112,15 +173,47 @@ class RasterTiles(object):
         if indexes is not None and isinstance(indexes, str):
             indexes = list(map(int, indexes.split(",")))
 
+        if indexes:
+            band_descriptions = [(ix, self.band_descriptions[ix - 1]) for ix in indexes]
+        else:
+            band_descriptions = [
+                (ix + 1, d) for ix, d in enumerate(self.band_descriptions)
+            ]
+
+        if len(self.path) != 1 and indexes:
+            path = [self.path[ii - 1] for ii in indexes]
+            indexes = None
+        else:
+            path = self.path
+
         if histogram_bins is not None and isinstance(histogram_bins, str):
             histogram_bins = int(histogram_bins)
 
         if histogram_range is not None and isinstance(histogram_range, str):
             histogram_range = tuple(map(float, histogram_range.split(",")))
 
-        return metadata(
-            self.path,
+        _metadata = partial(
+            metadata,
             indexes=indexes,
             histogram_bins=histogram_bins,
             histogram_range=histogram_range,
         )
+        with futures.ThreadPoolExecutor() as executor:
+            results = list(executor.map(_metadata, path))
+
+        info = {
+            "bounds": results[0]["bounds"],
+            "minzoom": self.minzoom,
+            "maxzoom": self.maxzoom,
+        }
+        info["band_descriptions"] = band_descriptions
+
+        if len(self.path) != 1:
+            info["statistics"] = {
+                band_descriptions[ix][0]: r["statistics"][1]
+                for ix, r in enumerate(results)
+            }
+        else:
+            info["statistics"] = results[0]["statistics"]
+
+        return info

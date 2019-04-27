@@ -37,6 +37,21 @@ Options:
   --help                     Show this message and exit
 ```
 
+Note: 
+
+You can provide multiple paths (e.g: bands stored as separate path) to rio-viz:
+
+```bash
+$ rio viz https://s3.eu-central-1.amazonaws.com/remotepixel-eu-central-1/sentinel-s2-l1c/tiles/18/T/XR/2019/4/21/0/B0{4,3,2}.tif
+```
+
+### Experimental 
+
+rio-viz support Mapbox VectorTiles encoding from raster array. This features was added to visualize spare data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.
+
+![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
+
+
 ### Docker
 
 You can use rio-viz directly from a docker container

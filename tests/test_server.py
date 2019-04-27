@@ -132,4 +132,4 @@ class TestHandlers(AsyncHTTPTestCase):
         self.assertTrue(response.buffer)
         self.assertEqual(response.headers["Content-Type"], "application/json")
         res = json.load(response.buffer)
-        assert res == {"coordinates": [-2.0, 48.0], "value": {"band1": 110}}
+        assert res == {"coordinates": [-2.0, 48.0], "value": {"cog_band1": 110}}
