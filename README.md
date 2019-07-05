@@ -1,8 +1,8 @@
 # rio-viz
 
 [![Packaging status](https://badge.fury.io/py/rio-viz.svg)](https://badge.fury.io/py/rio-viz)
-[![CircleCI](https://circleci.com/gh/developmentseed/rio-viz.svg?style=svg)](https://codecov.io/gh/developmentseed/rio-viz)
-[![codecov](https://codecov.io/gh/developmentseed/rio-viz/branch/master/graph/badge.svg)](https://circleci.com/gh/developmentseed/rio-viz)
+[![CircleCI](https://circleci.com/gh/developmentseed/rio-viz.svg?style=svg)](https://circleci.com/gh/developmentseed/rio-viz)
+[![codecov](https://codecov.io/gh/developmentseed/rio-viz/branch/master/graph/badge.svg)](https://codecov.io/gh/developmentseed/rio-viz)
 
 Rasterio plugin to visualize Cloud Optimized GeoTIFF in browser.
 
