@@ -9,7 +9,7 @@ Rasterio plugin to visualize Cloud Optimized GeoTIFF in browser.
 ![](https://user-images.githubusercontent.com/10407788/60689165-78be7780-9e88-11e9-84b9-9a3602156ef2.jpg)
 
 
-Freely adapted from the great [mapbox/rio-glui](github.com/mapbox/rio-glui)
+Freely adapted from the great [mapbox/rio-glui](https://github.com/mapbox/rio-glui)
 
 ### Install
 
