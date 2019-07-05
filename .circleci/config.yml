@@ -50,6 +50,9 @@ jobs:
       - checkout
       - run:
           name: install module
+          command: pip install numpy cython==0.28 --user
+      - run:
+          name: install module
           command: pip install -e . --user
       - run:
           name: verify git tag vs. version
