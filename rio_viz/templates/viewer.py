@@ -304,7 +304,7 @@ def viewer_template(
           </div>
         </section>
 
-        <!-- 1b Histogram Cut -->
+        <!-- Histogram Cut -->
         <div class='px12 pt12 pb6'>
           <div class='txt-h5 mt6 mb6 color-black'>Histogram Cut</div>
           <div id='histcut-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
@@ -323,6 +323,20 @@ def viewer_template(
           </div>
         </div>
 
+        <!-- Resampling -->
+        <div class='px12 pt12 pb6'>
+          <div class='txt-h5 mt6 mb6 color-black'>Resampling Method</div>
+          <div id='resamp-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
+            <label class='toggle-container'>
+              <input value='bilinear' name='toggle-resamp' type='radio' />
+              <div title='bilinear' class='toggle color-gray-dark-on-hover'>bilinear</div>
+            </label>
+            <label class='toggle-container'>
+              <input value='nearest' checked='checked' name='toggle-resamp' type='radio' />
+              <div title='nearest' class='toggle color-gray-dark-on-hover'>nearest</div>
+            </label>
+          </div>
+        </div>
       </div>
 
       <button id='btn-hide'><svg id='hide-arrow' class='icon'><use xlink:href='#icon-arrow-right'/></svg></button>
@@ -366,6 +380,7 @@ def viewer_template(
     }})
 
     const set1bViz = () => {{
+      const resamp = document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
       const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
       switch (vizType) {{
         case 'raster':
@@ -374,7 +389,7 @@ def viewer_template(
           const minV = scope.config[indexes].min
           const maxV = scope.config[indexes].max
 
-          let url = `${{api_endpoint}}/tilejson.json?tile_format=png&indexes=${{indexes}}&rescale=${{minV}},${{maxV}}`
+          let url = `${{api_endpoint}}/tilejson.json?tile_format=png&indexes=${{indexes}}&rescale=${{minV}},${{maxV}}&resampling_method=${{resamp}}`
           const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
           if (cmap.value !== 'b&w') url += `&color_map=${{cmap.value}}`
 
@@ -385,7 +400,7 @@ def viewer_template(
         case 'point':
           map.addSource('mvt', {{
             type: 'vector',
-            url: `${{api_endpoint}}/tilejson.json?tile_format=pbf&feature_type=point`
+            url: `${{api_endpoint}}/tilejson.json?tile_format=pbf&feature_type=point&resampling_method=${{resamp}}`
           }})
           addLayer(vizType)
           break
@@ -393,7 +408,7 @@ def viewer_template(
         case 'polygon':
           map.addSource('mvt', {{
             type: 'vector',
-            url: `${{api_endpoint}}/tilejson.json?tile_format=pbf&feature_type=polygon`
+            url: `${{api_endpoint}}/tilejson.json?tile_format=pbf&feature_type=polygon&resampling_method=${{resamp}}`
           }})
           addLayer(vizType)
           break
@@ -404,6 +419,8 @@ def viewer_template(
     }}
 
     const set3bViz = () => {{
+      const resamp = document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
+
       const r = document.getElementById('r-selector').value
       const g = document.getElementById('g-selector').value
       const b = document.getElementById('b-selector').value
@@ -417,7 +434,7 @@ def viewer_template(
       const rescale = `${{min1}},${{max1}},${{min2}},${{max2}},${{min3}},${{max3}}`
       indexes = `${{r}},${{g}},${{b}}`
 
-      let url = `${{api_endpoint}}/tilejson.json?tile_format=png&indexes=${{indexes}}&rescale=${{rescale}}`
+      let url = `${{api_endpoint}}/tilejson.json?tile_format=png&indexes=${{indexes}}&rescale=${{rescale}}&resampling_method=${{resamp}}`
       map.addSource('raster', {{ type: 'raster', url: url }})
       map.addLayer({{id: 'raster', type: 'raster', source: 'raster'}})
       addHisto3Bands()
@@ -694,6 +711,11 @@ def viewer_template(
       }}
       switchViz()
     }})
+
+    document.getElementById('resamp-selector').addEventListener('change', (e) => {{
+      switchViz()
+    }})
+
 
     // MVT have already all the layers while for raster we need to fetch new tiles
     const updateViz = () => {{

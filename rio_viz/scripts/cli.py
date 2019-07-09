@@ -87,7 +87,7 @@ def viz(src_paths, style, port, mapbox_token, no_check):
                 src_paths[ii] = tmp_path.name
 
         src_dst = raster.RasterTiles(src_paths)
-        application = app.viz(src_dst, token=mapbox_token, port=port)
+        application = app.viz(src_dst, token=mapbox_token, port=port, style=style)
         url = application.get_template_url()
         click.echo(f"Viewer started at {url}", err=True)
         click.launch(url)
