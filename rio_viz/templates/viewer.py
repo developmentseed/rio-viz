@@ -729,9 +729,6 @@ def viewer_template(
 
     document.getElementById('layer-selector').addEventListener('change', () => {{
       const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const indexes = active_layer.getAttribute('data-indexes')
-      document.getElementById('minCut').value = scope.config[indexes].set.min.toString().slice(0, 6)
-      document.getElementById('maxCut').value = scope.config[indexes].set.max.toString().slice(0, 6)
       updateViz()
     }})
 
