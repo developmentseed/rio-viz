@@ -1,5 +1,23 @@
 """rio-viz: Viewer template."""
 
+color_map_items = [
+    {"name": "CFastie", "id": "cfastie"},
+    {"name": "RPlumbo", "id": "rplumbo"},
+    {"name": "Schwarzwald (elevation)", "id": "schwarzwald"},
+    {"name": "Viridis", "id": "viridis"},
+    {"name": "Blue-Red", "id": "rdbu_r"},
+    {"name": "Blue-Green", "id": "bugn"},
+    {"name": "Yellow-Green", "id": "ylgn"},
+    {"name": "Magma", "id": "magma"},
+    {"name": "Earth", "id": "gist_earth"},
+    {"name": "Ocean", "id": "ocean"},
+    {"name": "Terrain", "id": "terrain"},
+]
+
+color_map_list = "\n".join(
+    [f"<option value={cm['id']}>{cm['name']}</option>" for cm in color_map_items]
+)
+
 
 def viewer_template(
     endpoint: str, mapbox_access_token: str = "", mapbox_style="satellite"
@@ -123,6 +141,11 @@ def viewer_template(
             #toolbar li.active {{
               color: #000;
               background-color: #fff;
+            }}
+
+            #toolbar li.disabled {{
+                pointer-events:none;
+                opacity:0.4;
             }}
 
             #menu-content section {{
@@ -286,9 +309,7 @@ def viewer_template(
             <div class='select-container wmax-full'>
               <select id='colormap-selector' class='select select--s select--stroke wmax-full color-black'>
                 <option value='b&w'>Black and White</option>
-                <option value='cfastie'>cfastie</option>
-                <option value='rplumbo'>rplumbo</option>
-                <option value='schwarzwald'>schwarzwald (elevation)</option>
+                {color_map_list}
               </select>
               <div class='select-arrow color-black'></div>
             </div>
@@ -959,6 +980,14 @@ def viewer_template(
           const bounds = scope.metadata.bounds.value
           map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
           addAOI(bounds)
+
+          if (nbands === 1) {{
+            document.getElementById('3b').classList.add('disabled')
+            document.getElementById('3b').classList.remove('active')
+            document.getElementById('3b-section').classList.toggle('active')
+            document.getElementById('1b').classList.add('active')
+            document.getElementById('1b-section').classList.toggle('active')
+          }}
 
           switchViz()
         }})

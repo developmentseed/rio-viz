@@ -4,6 +4,8 @@ import os
 import tempfile
 from contextlib import contextmanager, ExitStack
 
+import numpy
+
 import click
 from rio_viz import app, raster
 
@@ -47,8 +49,32 @@ class MbxTokenType(click.ParamType):
             )
 
 
+class NodataParamType(click.ParamType):
+    """Nodata inddex type."""
+
+    name = "nodata"
+
+    def convert(self, value, param, ctx):
+        """Validate and parse band index."""
+        try:
+            if value.lower() == "nan":
+                return numpy.nan
+            elif value.lower() in ["nil", "none", "nada"]:
+                return None
+            else:
+                return float(value)
+        except (TypeError, ValueError):
+            raise click.ClickException("{} is not a valid nodata value.".format(value))
+
+
 @click.command()
 @click.argument("src_paths", type=str, nargs=-1, required=True)
+@click.option(
+    "--nodata",
+    type=NodataParamType(),
+    metavar="NUMBER|nan",
+    help="Set nodata masking values for input dataset.",
+)
 @click.option(
     "--style",
     type=click.Choice(["satellite", "basic"]),
@@ -64,7 +90,7 @@ class MbxTokenType(click.ParamType):
     help="Pass Mapbox token",
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
-def viz(src_paths, style, port, mapbox_token, no_check):
+def viz(src_paths, nodata, style, port, mapbox_token, no_check):
     """Rasterio Viz cli."""
     # Check if cog
     src_paths = list(src_paths)
@@ -86,7 +112,7 @@ def viz(src_paths, style, port, mapbox_token, no_check):
                 cog_translate(src_path, tmp_path.name, output_profile, config=config)
                 src_paths[ii] = tmp_path.name
 
-        src_dst = raster.RasterTiles(src_paths)
+        src_dst = raster.RasterTiles(src_paths, nodata=nodata)
         application = app.viz(src_dst, token=mapbox_token, port=port, style=style)
         url = application.get_template_url()
         click.echo(f"Viewer started at {url}", err=True)

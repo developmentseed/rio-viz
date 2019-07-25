@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler~=1.2",
+    "rio-tiler>=1.2.10",
     "rio-tiler-mvt",
     "rio-color",
     "fastapi",
@@ -20,7 +20,7 @@ extra_reqs = {
 
 setup(
     name="rio-viz",
-    version="0.0.3",
+    version="0.0.4",
     python_requires=">=3",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
     classifiers=[

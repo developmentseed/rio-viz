@@ -76,13 +76,14 @@ def postprocess_tile(
 class RasterTiles(object):
     """Raster tiles object."""
 
-    def __init__(self, src_path: str):
+    def __init__(self, src_path: str, nodata: Union[str, int, float] = None):
         """Initialize RasterTiles object."""
         if isinstance(src_path, str):
             src_path = [src_path]
         elif isinstance(src_path, tuple):
             src_path = list(src_path)
         self.path = src_path
+        self.nodata = nodata
 
         with futures.ThreadPoolExecutor() as executor:
             responses = list(executor.map(_get_info, self.path))
@@ -105,7 +106,6 @@ class RasterTiles(object):
         y: int,
         tilesize: int = 256,
         indexes: Tuple[int] = None,
-        nodata: Union[str, int, float] = None,
         resampling_method: str = "bilinear",
     ) -> [numpy.ndarray, numpy.ndarray]:
         """Read raster tile data and mask."""
@@ -127,7 +127,7 @@ class RasterTiles(object):
             tile_z=z,
             tilesize=tilesize,
             indexes=indexes,
-            nodata=nodata,
+            nodata=self.nodata,
             resampling_method=resampling_method,
         )
         with futures.ThreadPoolExecutor() as executor:
@@ -143,18 +143,12 @@ class RasterTiles(object):
         x: int,
         y: int,
         tilesize: int = 128,
-        nodata: Union[str, int, float] = None,
         resampling_method: str = "bilinear",
         feature_type: str = "point",
     ) -> BinaryIO:
         """Read raster tile data and encode to MVT."""
         tile, mask = self.read_tile(
-            z,
-            x,
-            y,
-            tilesize=tilesize,
-            resampling_method=resampling_method,
-            nodata=nodata,
+            z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )
         return mvtEncoder(tile, mask, self.band_descriptions, feature_type=feature_type)
 
@@ -199,7 +193,6 @@ class RasterTiles(object):
         indexes: str = None,
         pmin: float = 2.0,
         pmax: float = 98.0,
-        nodata: Union[str, int, float] = None,
         histogram_bins: int = 20,
         histogram_range: Tuple = None,
     ) -> dict:
@@ -223,7 +216,7 @@ class RasterTiles(object):
         _metadata = partial(
             cogTiler.metadata,
             indexes=indexes,
-            nodata=nodata,
+            nodata=self.nodata,
             pmin=pmin,
             pmax=pmax,
             histogram_bins=histogram_bins,
