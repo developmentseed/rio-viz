@@ -13,7 +13,7 @@ Freely adapted from the great [mapbox/rio-glui](https://github.com/mapbox/rio-gl
 
 ### Install
 
-You can install rio-tiler using pip
+You can install rio-viz using pip
 
 ```bash 
 $ pip install -U pip cython==0.28
@@ -57,6 +57,6 @@ $ rio viz https://s3.eu-central-1.amazonaws.com/remotepixel-eu-central-1/sentine
 
 ### Experimental 
 
-rio-viz support Mapbox VectorTiles encoding from raster array. This features was added to visualize spare data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.
+rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature was added to visualize sparse data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.
 
 ![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
