@@ -10,7 +10,8 @@ import numpy
 
 import mercantile
 import rasterio
-from rasterio.warp import transform_bounds, transform
+from rasterio.vrt import WarpedVRT
+from rasterio.warp import transform_bounds, transform as transform_pts
 
 from rio_tiler import main as cogTiler
 from rio_tiler.mercator import get_zooms
@@ -23,11 +24,13 @@ from rio_color.utils import scale_dtype, to_math_type
 
 def _get_info(src_path):
     with rasterio.open(src_path) as src_dst:
-        bounds = transform_bounds(
-            *[src_dst.crs, "epsg:4326"] + list(src_dst.bounds), densify_pts=21
-        )
-        center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
-        minzoom, maxzoom = get_zooms(src_dst)
+        vrt_params = {}
+        with WarpedVRT(src_dst, **vrt_params) as vrt_dst:
+            bounds = transform_bounds(
+                *[vrt_dst.crs, "epsg:4326"] + list(vrt_dst.bounds), densify_pts=21
+            )
+            center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
+            minzoom, maxzoom = get_zooms(vrt_dst)
 
         def _get_name(ix):
             name = src_dst.descriptions[ix - 1]
@@ -36,8 +39,9 @@ def _get_info(src_path):
             return name
 
         band_descriptions = [_get_name(ix) for ix in src_dst.indexes]
+        data_type = src_dst.dtypes[0]
 
-    return bounds, center, minzoom, maxzoom, band_descriptions
+    return bounds, center, minzoom, maxzoom, band_descriptions, data_type
 
 
 def postprocess_tile(
@@ -92,6 +96,7 @@ class RasterTiles(object):
         self.center = responses[0][1]
         self.minzoom = responses[0][2]
         self.maxzoom = responses[0][3]
+        self.data_type = responses[0][5]
         if len(self.path) != 1:
             self.band_descriptions = [
                 os.path.basename(p).split(os.path.extsep)[0] for p in self.path
@@ -154,7 +159,7 @@ class RasterTiles(object):
 
     def _get_point(self, src_path: str, coordinates: Tuple[float, float]) -> dict:
         with rasterio.open(src_path) as src_dst:
-            lon_srs, lat_srs = transform(
+            lon_srs, lat_srs = transform_pts(
                 "EPSG:4326", src_dst.crs, [coordinates[0]], [coordinates[1]]
             )
             return list(
@@ -239,5 +244,7 @@ class RasterTiles(object):
             }
         else:
             info["statistics"] = results[0]["statistics"]
+
+        info["dtype"] = self.data_type
 
         return info

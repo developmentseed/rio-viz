@@ -330,7 +330,11 @@ def viewer_template(
           <div class='txt-h5 mt6 mb6 color-black'>Histogram Cut</div>
           <div id='histcut-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
             <label class='toggle-container'>
-              <input value="minmax" checked="checked" name='toggle-histo' type='radio' />
+              <input value="none" checked="checked" name='toggle-histo' type='radio' />
+              <div title='None' class='toggle color-gray-dark-on-hover'>None</div>
+            </label>
+            <label class='toggle-container'>
+              <input value="minmax" name='toggle-histo' type='radio' />
               <div title='MinMax' class='toggle color-gray-dark-on-hover'>MinMax</div>
             </label>
             <label class='toggle-container'>
@@ -351,6 +355,10 @@ def viewer_template(
             <label class='toggle-container'>
               <input value='bilinear' name='toggle-resamp' type='radio' />
               <div title='bilinear' class='toggle color-gray-dark-on-hover'>bilinear</div>
+            </label>
+            <label class='toggle-container'>
+              <input value='cubic' name='toggle-resamp' type='radio' />
+              <div title='cubic' class='toggle color-gray-dark-on-hover'>cubic</div>
             </label>
             <label class='toggle-container'>
               <input value='nearest' checked='checked' name='toggle-resamp' type='radio' />
@@ -401,20 +409,29 @@ def viewer_template(
     }})
 
     const set1bViz = () => {{
-      const resamp = document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
+      params = {{
+        resampling_method:  document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
+        tile_format: 'png'
+      }}
+
       const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
       switch (vizType) {{
         case 'raster':
           const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-          const indexes = active_layer.getAttribute('data-indexes')
-          const minV = scope.config[indexes].min
-          const maxV = scope.config[indexes].max
-
-          let url = `${{api_endpoint}}/tilejson.json?tile_format=png&indexes=${{indexes}}&rescale=${{minV}},${{maxV}}&resampling_method=${{resamp}}`
+          indexes = active_layer.getAttribute('data-indexes')
+          params.indexes = indexes
+          if (document.getElementById('histcut-selector').querySelector("input[name='toggle-histo']:checked").value !== 'none') {{
+            const minV = scope.config[indexes].min
+            const maxV = scope.config[indexes].max
+            params.rescale =  `${{minV}},${{maxV}}`
+          }}
           const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
-          if (cmap.value !== 'b&w') url += `&color_map=${{cmap.value}}`
+          if (cmap.value !== 'b&w') params.color_map = cmap.value
 
-          map.addSource('raster', {{ type: 'raster', url: url }})
+          const url_params = Object.keys(params).map(i => `${{i}}=${{params[i]}}`).join('&')
+          let url = `${{api_endpoint}}/tilejson.json?${{url_params}}`
+
+          map.addSource('raster', {{ type: 'raster', url: url , tileSize: 256}})
           addLayer(vizType)
           break
 
@@ -440,23 +457,28 @@ def viewer_template(
     }}
 
     const set3bViz = () => {{
-      const resamp = document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
-
       const r = document.getElementById('r-selector').value
       const g = document.getElementById('g-selector').value
       const b = document.getElementById('b-selector').value
 
-      const min1 = scope.config[r].min
-      const max1 = scope.config[r].max
-      const min2 = scope.config[g].min
-      const max2 = scope.config[g].max
-      const min3 = scope.config[r].min
-      const max3 = scope.config[r].max
-      const rescale = `${{min1}},${{max1}},${{min2}},${{max2}},${{min3}},${{max3}}`
-      indexes = `${{r}},${{g}},${{b}}`
+      params = {{
+        resampling_method:  document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
+        tile_format: 'png',
+        indexes: `${{r}},${{g}},${{b}}`
+      }}
 
-      let url = `${{api_endpoint}}/tilejson.json?tile_format=png&indexes=${{indexes}}&rescale=${{rescale}}&resampling_method=${{resamp}}`
-      map.addSource('raster', {{ type: 'raster', url: url }})
+      if (document.getElementById('histcut-selector').querySelector("input[name='toggle-histo']:checked").value !== 'none') {{
+        const min1 = scope.config[r].min
+        const max1 = scope.config[r].max
+        const min2 = scope.config[g].min
+        const max2 = scope.config[g].max
+        const min3 = scope.config[r].min
+        const max3 = scope.config[r].max
+        params.rescale =  `${{min1}},${{max1}},${{min2}},${{max2}},${{min3}},${{max3}}`
+      }}
+      const url_params = Object.keys(params).map(i => `${{i}}=${{params[i]}}`).join('&')
+      let url = `${{api_endpoint}}/tilejson.json?${{url_params}}`
+      map.addSource('raster', {{ type: 'raster', url: url, tileSize: 256}})
       map.addLayer({{id: 'raster', type: 'raster', source: 'raster'}})
       addHisto3Bands()
     }}
@@ -918,6 +940,10 @@ def viewer_template(
         .then(data => {{
           scope.metadata = data
           console.log(data)
+
+          if (scope.metadata.dtype !== "uint8") {{
+            document.getElementById('histcut-selector').querySelector("input[value='minmax']").checked = true
+          }}
 
           scope.config = {{}}
           Object.entries(scope.metadata.statistics).forEach(entry => {{

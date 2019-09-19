@@ -32,6 +32,7 @@ def test_rastertiles_valid():
     assert r.minzoom == 6
     assert r.maxzoom == 8
     assert r.band_descriptions == ["cogb1", "cogb2", "cogb3"]
+    assert r.data_type
 
 
 def test_rastertiles_tile_exists_valid():
@@ -134,6 +135,7 @@ def test_rastertiles_metadata():
     assert metadata["band_descriptions"] == [(1, "cogb1"), (2, "cogb2"), (3, "cogb3")]
     assert metadata["bounds"]
     assert metadata["statistics"]
+    assert metadata["dtype"]
     assert len(metadata["statistics"].keys()) == 3
 
     metadata = r.metadata(indexes="2")
