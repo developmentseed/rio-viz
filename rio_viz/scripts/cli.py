@@ -83,6 +83,12 @@ class NodataParamType(click.ParamType):
 )
 @click.option("--port", type=int, default=8080, help="Webserver port (default: 8080)")
 @click.option(
+    "--host",
+    type=str,
+    default="127.0.0.1",
+    help="Webserver host url (default: 127.0.0.1)",
+)
+@click.option(
     "--mapbox-token",
     type=MbxTokenType(),
     metavar="TOKEN",
@@ -90,7 +96,8 @@ class NodataParamType(click.ParamType):
     help="Pass Mapbox token",
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
-def viz(src_paths, nodata, style, port, mapbox_token, no_check):
+@click.option("--simple", is_flag=True, default=False, help="Launch simple viewer")
+def viz(src_paths, nodata, style, port, host, mapbox_token, no_check, simple):
     """Rasterio Viz cli."""
     # Check if cog
     src_paths = list(src_paths)
@@ -113,8 +120,14 @@ def viz(src_paths, nodata, style, port, mapbox_token, no_check):
                 src_paths[ii] = tmp_path.name
 
         src_dst = raster.RasterTiles(src_paths, nodata=nodata)
-        application = app.viz(src_dst, token=mapbox_token, port=port, style=style)
-        url = application.get_template_url()
+        application = app.viz(
+            src_dst, token=mapbox_token, port=port, host=host, style=style
+        )
+        url = (
+            application.get_simple_template_url()
+            if simple
+            else application.get_template_url()
+        )
         click.echo(f"Viewer started at {url}", err=True)
         click.launch(url)
         application.start()

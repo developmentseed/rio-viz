@@ -6,7 +6,7 @@ import re
 import urllib
 
 from rio_viz import version as rioviz_version
-from rio_viz.templates.viewer import viewer_template
+from rio_viz.templates.viewer import viewer_template, simple_viewer_template
 from rio_viz.raster import postprocess_tile
 
 from rio_tiler.profiles import img_profiles
@@ -29,10 +29,15 @@ def TileResponse(content: BinaryIO, media_type: str) -> Response:
 
 
 class viz(object):
-    """Creates a very minimal slippy map tile server using tornado.ioloop."""
+    """Creates a very minimal slippy map tile server using fastAPI + Uvicorn."""
 
     def __init__(
-        self, raster, token: str = None, port: int = 8080, style: str = "satellite"
+        self,
+        raster,
+        token: str = None,
+        port: int = 8080,
+        host: str = "127.0.0.1",
+        style: str = "satellite",
     ):
         """Initialize app."""
         self.app = FastAPI(
@@ -50,6 +55,7 @@ class viz(object):
         self.app.add_middleware(GZipMiddleware, minimum_size=0)
         self.raster = raster
         self.port = port
+        self.host = host
         self.style = style
         self.token = token
 
@@ -198,18 +204,35 @@ class viz(object):
         def viewer():
             """Handle /requests."""
             return viewer_template(
-                f"http://127.0.0.1:{self.port}",
+                f"http://{self.host}:{self.port}",
+                mapbox_access_token=self.token,
+                mapbox_style=self.style,
+            )
+
+        @self.app.get(
+            "/index_simple.html",
+            responses={200: {"description": "Simple COG viewer."}},
+            response_class=HTMLResponse,
+        )
+        def simple_viewer():
+            """Handle /requests."""
+            return simple_viewer_template(
+                f"http://{self.host}:{self.port}",
                 mapbox_access_token=self.token,
                 mapbox_style=self.style,
             )
 
     def get_endpoint_url(self) -> str:
         """Get endpoint url."""
-        return "http://127.0.0.1:{}".format(self.port)
+        return f"http://{self.host}:{self.port}"
 
     def get_template_url(self) -> str:
         """Get simple app template url."""
-        return "http://127.0.0.1:{}/index.html".format(self.port)
+        return f"http://{self.host}:{self.port}/index.html"
+
+    def get_simple_template_url(self) -> str:
+        """Get simple app template url."""
+        return f"http://{self.host}:{self.port}/index_simple.html"
 
     def get_bounds(self) -> str:
         """Get RasterTiles bounds."""
@@ -221,4 +244,4 @@ class viz(object):
 
     def start(self):
         """Start tile server."""
-        uvicorn.run(app=self.app, host="127.0.0.1", port=self.port, log_level="warning")
+        uvicorn.run(app=self.app, host=self.host, port=self.port, log_level="info")

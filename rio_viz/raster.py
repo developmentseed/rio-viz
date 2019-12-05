@@ -10,7 +10,6 @@ import numpy
 
 import mercantile
 import rasterio
-from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_bounds, transform as transform_pts
 
 from rio_tiler import main as cogTiler
@@ -24,13 +23,11 @@ from rio_color.utils import scale_dtype, to_math_type
 
 def _get_info(src_path):
     with rasterio.open(src_path) as src_dst:
-        vrt_params = {}
-        with WarpedVRT(src_dst, **vrt_params) as vrt_dst:
-            bounds = transform_bounds(
-                *[vrt_dst.crs, "epsg:4326"] + list(vrt_dst.bounds), densify_pts=21
-            )
-            center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
-            minzoom, maxzoom = get_zooms(vrt_dst)
+        bounds = transform_bounds(
+            src_dst.crs, "epsg:4326", *src_dst.bounds, densify_pts=21
+        )
+        center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
+        minzoom, maxzoom = get_zooms(src_dst)
 
         def _get_name(ix):
             name = src_dst.descriptions[ix - 1]
@@ -231,7 +228,7 @@ class RasterTiles(object):
             results = list(executor.map(_metadata, path))
 
         info = {
-            "bounds": results[0]["bounds"],
+            "bounds": {"value": self.bounds, "crs": "epsg:4326"},
             "minzoom": self.minzoom,
             "maxzoom": self.maxzoom,
         }
