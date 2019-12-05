@@ -24,7 +24,7 @@ def test_viz():
     assert app.get_center() == r.center
     assert app.get_endpoint_url() == "http://127.0.0.1:8080"
     assert app.get_template_url() == "http://127.0.0.1:8080/index.html"
-
+    assert app.get_simple_template_url() == "http://127.0.0.1:8080/index_simple.html"
     client = TestClient(app.app)
 
     response = client.get("/")
@@ -86,3 +86,14 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     assert response.json() == {"coordinates": [-2.0, 48.0], "value": {"band1": 110}}
+
+
+def test_viz_custom():
+    """Should work as expected (create TileServer object)."""
+    r = RasterTiles(cog_path)
+    app = viz(r, host="0.0.0.0", port=5050)
+    assert app.raster == r
+    assert app.port == 5050
+    assert app.get_bounds() == r.bounds
+    assert app.get_center() == r.center
+    assert app.get_endpoint_url() == "http://0.0.0.0:5050"
