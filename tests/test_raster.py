@@ -17,36 +17,22 @@ cogb3_path = os.path.join(os.path.dirname(__file__), "fixtures", "cogb3.tif")
 def test_rastertiles_valid():
     """Should work as expected (create rastertiles object)."""
     r = RasterTiles(cog_path)
-    assert r.path == [cog_path]
+    assert r.path == (cog_path,)
     assert list(map(int, r.bounds)) == [-3, 47, 0, 50]
     assert r.minzoom == 6
     assert r.maxzoom == 8
     assert r.band_descriptions == ["band1"]
 
     r = RasterTiles((cog_path,))
-    assert r.path == [cog_path]
+    assert r.path == (cog_path,)
 
     r = RasterTiles((cogb1_path, cogb2_path, cogb3_path))
-    assert r.path == [cogb1_path, cogb2_path, cogb3_path]
+    assert r.path == (cogb1_path, cogb2_path, cogb3_path)
     assert list(map(int, r.bounds)) == [-3, 47, 0, 50]
     assert r.minzoom == 6
     assert r.maxzoom == 8
     assert r.band_descriptions == ["cogb1", "cogb2", "cogb3"]
     assert r.data_type
-
-
-def test_rastertiles_tile_exists_valid():
-    """Should work as expected (create rastertiles object and check if tile exists)."""
-    r = RasterTiles(cog_path)
-    z = 7
-    x = 64
-    y = 43
-    assert r.tile_exists(z, x, y)
-
-    z = 7
-    x = 4
-    y = 43
-    assert not r.tile_exists(z, x, y)
 
 
 def test_rastertiles_tile_point_valid():
@@ -121,14 +107,7 @@ def test_rastertiles_metadata():
     assert metadata["band_descriptions"] == [(1, "band1")]
     assert metadata["bounds"]
     assert metadata["statistics"]
-    assert len(metadata["statistics"][1]["histogram"][0]) == 20
-
-    metadata = r.metadata(histogram_bins=10)
     assert len(metadata["statistics"][1]["histogram"][0]) == 10
-
-    pc = metadata["statistics"][1]["pc"]
-    metadata = r.metadata(histogram_range=pc)
-    assert metadata["statistics"][1]["histogram"]
 
     r = RasterTiles((cogb1_path, cogb2_path, cogb3_path))
     metadata = r.metadata()
@@ -138,7 +117,7 @@ def test_rastertiles_metadata():
     assert metadata["dtype"]
     assert len(metadata["statistics"].keys()) == 3
 
-    metadata = r.metadata(indexes="2")
+    metadata = r.metadata(indexes=(2,))
     assert metadata["band_descriptions"] == [(2, "cogb2")]
     assert metadata["bounds"]
     assert metadata["statistics"]

@@ -308,7 +308,7 @@ def viewer_template(
             <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-palette'/></svg> Color Map</div>
             <div class='select-container wmax-full'>
               <select id='colormap-selector' class='select select--s select--stroke wmax-full color-black'>
-                <option value='b&w'>Black and White</option>
+                <option value='b&w'>Internal</option>
                 {color_map_list}
               </select>
               <div class='select-arrow color-black'></div>
@@ -410,8 +410,7 @@ def viewer_template(
 
     const set1bViz = () => {{
       params = {{
-        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
-        tile_format: 'png'
+        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
       }}
 
       const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
@@ -431,7 +430,7 @@ def viewer_template(
           const url_params = Object.keys(params).map(i => `${{i}}=${{params[i]}}`).join('&')
           let url = `${{api_endpoint}}/tilejson.json?${{url_params}}`
 
-          map.addSource('raster', {{ type: 'raster', url: url , tileSize: 256}})
+          map.addSource('raster', {{ type: 'raster', url: url , tileSize: 512}})
           addLayer(vizType)
           break
 
@@ -463,7 +462,6 @@ def viewer_template(
 
       params = {{
         resampling_method:  document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
-        tile_format: 'png',
         indexes: `${{r}},${{g}},${{b}}`
       }}
 
@@ -478,7 +476,7 @@ def viewer_template(
       }}
       const url_params = Object.keys(params).map(i => `${{i}}=${{params[i]}}`).join('&')
       let url = `${{api_endpoint}}/tilejson.json?${{url_params}}`
-      map.addSource('raster', {{ type: 'raster', url: url, tileSize: 256}})
+      map.addSource('raster', {{ type: 'raster', url: url, tileSize: 512}})
       map.addLayer({{id: 'raster', type: 'raster', source: 'raster'}})
       addHisto3Bands()
     }}
@@ -941,7 +939,8 @@ def viewer_template(
           scope.metadata = data
           console.log(data)
 
-          if (scope.metadata.dtype !== "uint8") {{
+          //# TODO add byte
+          if (['uint8','int8'].indexOf(scope.metadata.dtype) === -1) {{
             document.getElementById('histcut-selector').querySelector("input[value='minmax']").checked = true
           }}
 
@@ -1003,7 +1002,7 @@ def viewer_template(
           document.getElementById('hide-arrow').classList.toggle('off')
           document.getElementById('menu').classList.toggle('off')
 
-          const bounds = scope.metadata.bounds.value
+          const bounds = scope.metadata.bounds
           map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
           addAOI(bounds)
 
@@ -1332,8 +1331,7 @@ def simple_viewer_template(
       if (map.getSource('raster')) map.removeSource('raster')
 
       params = {{
-        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
-        tile_format: 'png'
+        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
       }}
 
       const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
@@ -1352,7 +1350,7 @@ def simple_viewer_template(
       const url_params = Object.keys(params).map(i => `${{i}}=${{params[i]}}`).join('&')
       let url = `${{api_endpoint}}/tilejson.json?${{url_params}}`
       console.log(url)
-      map.addSource('raster', {{ type: 'raster', url: url , tileSize: 256}})
+      map.addSource('raster', {{ type: 'raster', url: url , tileSize: 512}})
       map.addLayer({{
         id: 'raster',
         type: 'raster',
@@ -1439,7 +1437,7 @@ def simple_viewer_template(
           document.getElementById('hide-arrow').classList.toggle('off')
           document.getElementById('menu').classList.toggle('off')
 
-          const bounds = scope.metadata.bounds.value
+          const bounds = scope.metadata.bounds
           map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
           addAOI(bounds)
 
