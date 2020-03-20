@@ -1,18 +1,19 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import BinaryIO, Tuple, Union
+from typing import Any, BinaryIO, Tuple, Union, Sequence
 
-import os
-from functools import partial
+import re
+from pathlib import Path
 from concurrent import futures
 
 import numpy
 
-import mercantile
-import rasterio
-from rasterio.warp import transform_bounds, transform as transform_pts
 
-from rio_tiler import main as cogTiler
+import rasterio
+from rasterio.warp import transform_bounds
+
+from rio_tiler import reader
+from rio_tiler import constants
 from rio_tiler.mercator import get_zooms
 from rio_tiler.utils import linear_rescale, _chunks
 from rio_tiler_mvt.mvt import encoder as mvtEncoder
@@ -21,13 +22,13 @@ from rio_color.operations import parse_operations
 from rio_color.utils import scale_dtype, to_math_type
 
 
-def _get_info(src_path):
+def _get_info(src_path: str) -> Any:
     with rasterio.open(src_path) as src_dst:
         bounds = transform_bounds(
-            src_dst.crs, "epsg:4326", *src_dst.bounds, densify_pts=21
+            src_dst.crs, constants.WGS84_CRS, *src_dst.bounds, densify_pts=21
         )
-        center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
         minzoom, maxzoom = get_zooms(src_dst)
+        center = ((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2, minzoom)
 
         def _get_name(ix):
             name = src_dst.descriptions[ix - 1]
@@ -37,8 +38,12 @@ def _get_info(src_path):
 
         band_descriptions = [_get_name(ix) for ix in src_dst.indexes]
         data_type = src_dst.dtypes[0]
+        try:
+            cmap = src_dst.colormap(1)
+        except ValueError:
+            cmap = None
 
-    return bounds, center, minzoom, maxzoom, band_descriptions, data_type
+    return bounds, center, minzoom, maxzoom, band_descriptions, data_type, cmap
 
 
 def postprocess_tile(
@@ -46,7 +51,7 @@ def postprocess_tile(
     mask: numpy.ndarray,
     rescale: str = None,
     color_formula: str = None,
-) -> Tuple[numpy.ndarray, numpy.ndarray]:
+) -> numpy.ndarray:
     """Post-process tile data."""
     if rescale:
         rescale_arr = list(map(float, rescale.split(",")))
@@ -71,18 +76,17 @@ def postprocess_tile(
         for ops in parse_operations(color_formula):
             tile = scale_dtype(ops(to_math_type(tile)), numpy.uint8)
 
-    return tile, mask
+    return tile
 
 
 class RasterTiles(object):
     """Raster tiles object."""
 
-    def __init__(self, src_path: str, nodata: Union[str, int, float] = None):
+    def __init__(self, src_path: Sequence[str], nodata: Union[str, int, float] = None):
         """Initialize RasterTiles object."""
         if isinstance(src_path, str):
-            src_path = [src_path]
-        elif isinstance(src_path, tuple):
-            src_path = list(src_path)
+            src_path = (src_path,)
+
         self.path = src_path
         self.nodata = nodata
 
@@ -94,9 +98,14 @@ class RasterTiles(object):
         self.minzoom = responses[0][2]
         self.maxzoom = responses[0][3]
         self.data_type = responses[0][5]
+        self.colormap = responses[0][6]
+
         if len(self.path) != 1:
             self.band_descriptions = [
-                os.path.basename(p).split(os.path.extsep)[0] for p in self.path
+                Path(p).stem
+                if re.match(r"^band[0-9]+$", responses[idx][4][0])
+                else responses[idx][4][0]
+                for idx, p in enumerate(self.path)
             ]
         else:
             self.band_descriptions = responses[0][4]
@@ -107,37 +116,26 @@ class RasterTiles(object):
         x: int,
         y: int,
         tilesize: int = 256,
-        indexes: Tuple[int] = None,
+        indexes: Sequence[int] = None,
         resampling_method: str = "bilinear",
-    ) -> [numpy.ndarray, numpy.ndarray]:
+    ) -> Tuple[numpy.ndarray, numpy.ndarray]:
         """Read raster tile data and mask."""
-        if isinstance(indexes, int):
-            indexes = [indexes]
-        elif isinstance(indexes, tuple):
-            indexes = list(indexes)
-
         if len(self.path) != 1 and indexes:
             path = [self.path[ii - 1] for ii in indexes]
             indexes = None
         else:
             path = self.path
 
-        _tiler = partial(
-            cogTiler.tile,
-            tile_x=x,
-            tile_y=y,
-            tile_z=z,
+        return reader.multi_tile(
+            path,
+            x,
+            y,
+            z,
             tilesize=tilesize,
             indexes=indexes,
             nodata=self.nodata,
             resampling_method=resampling_method,
         )
-        with futures.ThreadPoolExecutor() as executor:
-            data, masks = zip(*list(executor.map(_tiler, path)))
-            data = numpy.concatenate(data)
-            mask = numpy.all(masks, axis=0).astype(numpy.uint8) * 255
-
-        return data, mask
 
     def read_tile_mvt(
         self,
@@ -154,21 +152,9 @@ class RasterTiles(object):
         )
         return mvtEncoder(tile, mask, self.band_descriptions, feature_type=feature_type)
 
-    def _get_point(self, src_path: str, coordinates: Tuple[float, float]) -> dict:
-        with rasterio.open(src_path) as src_dst:
-            lon_srs, lat_srs = transform_pts(
-                "EPSG:4326", src_dst.crs, [coordinates[0]], [coordinates[1]]
-            )
-            return list(
-                src_dst.sample([(lon_srs[0], lat_srs[0])], indexes=src_dst.indexes)
-            )[0].tolist()
-
     def point(self, coordinates: Tuple[float, float]) -> dict:
         """Read point value."""
-        _points = partial(self._get_point, coordinates=coordinates)
-        with futures.ThreadPoolExecutor() as executor:
-            results = list(executor.map(_points, self.path))
-
+        results = reader.multi_point(self.path, coordinates=coordinates)
         if len(self.path) != 1:
             results = [r[0] for r in results]
         else:
@@ -179,29 +165,12 @@ class RasterTiles(object):
             "value": {b: r for b, r in zip(self.band_descriptions, results)},
         }
 
-    def tile_exists(self, z: int, x: int, y: int) -> bool:
-        """Check if a mercator tile is within raster bounds."""
-        mintile = mercantile.tile(self.bounds[0], self.bounds[3], z)
-        maxtile = mercantile.tile(self.bounds[2], self.bounds[1], z)
-        return (
-            (x <= maxtile.x + 1)
-            and (x >= mintile.x)
-            and (y <= maxtile.y + 1)
-            and (y >= mintile.y)
-        )
-
     def metadata(
         self,
-        indexes: str = None,
-        pmin: float = 2.0,
-        pmax: float = 98.0,
-        histogram_bins: int = 20,
-        histogram_range: Tuple = None,
+        percentiles: Tuple[float, float] = (2.0, 98),
+        indexes: Sequence[int] = None,
     ) -> dict:
         """Get Raster metadata."""
-        if indexes is not None and isinstance(indexes, str):
-            indexes = list(map(int, indexes.split(",")))
-
         if indexes:
             band_descriptions = [(ix, self.band_descriptions[ix - 1]) for ix in indexes]
         else:
@@ -215,23 +184,21 @@ class RasterTiles(object):
         else:
             path = self.path
 
-        _metadata = partial(
-            cogTiler.metadata,
+        hist_options = dict()
+        if self.colormap:
+            hist_options.update(
+                dict(bins=[k for k, v in self.colormap.items() if v != (0, 0, 0, 255)])
+            )
+
+        results = reader.multi_metadata(
+            path,
             indexes=indexes,
             nodata=self.nodata,
-            pmin=pmin,
-            pmax=pmax,
-            histogram_bins=histogram_bins,
-            histogram_range=histogram_range,
+            percentiles=percentiles,
+            hist_options=hist_options,
         )
-        with futures.ThreadPoolExecutor() as executor:
-            results = list(executor.map(_metadata, path))
 
-        info = {
-            "bounds": {"value": self.bounds, "crs": "epsg:4326"},
-            "minzoom": self.minzoom,
-            "maxzoom": self.maxzoom,
-        }
+        info = {"bounds": self.bounds, "minzoom": self.minzoom, "maxzoom": self.maxzoom}
         info["band_descriptions"] = band_descriptions
 
         if len(self.path) != 1:
