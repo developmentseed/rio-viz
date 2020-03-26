@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler~=2.0a2",
+    "rio-tiler~=2.0a3",
     "rio-tiler-mvt",
     "rio-color",
     "fastapi",
@@ -15,7 +15,7 @@ inst_reqs = [
 
 extra_reqs = {
     "test": ["requests", "mock", "pytest", "pytest-cov"],
-    "dev": ["mock", "pytest", "pytest-cov", "pre-commit"],
+    "dev": ["mock", "pytest", "pytest-cov", "pre-commit", "pytest-asyncio"],
 }
 
 setup(

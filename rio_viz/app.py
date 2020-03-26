@@ -69,7 +69,7 @@ class viz(object):
             },
             description="Read COG and return a tile",
         )
-        def _mvt(
+        async def _mvt(
             z: int,
             x: int,
             y: int,
@@ -80,7 +80,7 @@ class viz(object):
             resampling_method: str = Query("nearest", title="rasterio resampling"),
         ):
             """Handle /mvt requests."""
-            content = self.raster.read_tile_mvt(
+            content = await self.raster.read_tile_mvt(
                 z,
                 x,
                 y,
@@ -112,7 +112,7 @@ class viz(object):
             response_class=TileResponse,
             description="Read COG and return a tile",
         )
-        def _tile(
+        async def _tile(
             z: int,
             x: int,
             y: int,
@@ -133,7 +133,7 @@ class viz(object):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
             tilesize = scale * 256
-            tile, mask = self.raster.read_tile(
+            tile, mask = await self.raster.read_tile(
                 z,
                 x,
                 y,

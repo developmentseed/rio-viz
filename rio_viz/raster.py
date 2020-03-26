@@ -1,8 +1,10 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import Any, BinaryIO, Tuple, Union, Sequence
+from typing import Any, BinaryIO, Callable, Tuple, Union, Sequence
 
 import re
+import asyncio
+import functools
 from pathlib import Path
 from concurrent import futures
 
@@ -44,6 +46,24 @@ def _get_info(src_path: str) -> Any:
             cmap = None
 
     return bounds, center, minzoom, maxzoom, band_descriptions, data_type, cmap
+
+
+# From https://gist.github.com/geospatial-jeff/baf32f44bf2fbd073498e3d92f82523b#file-rio_tiler_asyncio-py-L21
+async def run_in_threadpool(func: Callable, *args: Any, **kwargs: Any):
+    """
+    This method lets us call a blocking function as a coroutine by running it in the event loop's executor.  It's really
+    just a slimmed down version of ``starlette.concurrency.run_in_threadpool``
+    https://github.com/encode/starlette/blob/master/starlette/concurrency.py#L21-L34
+    """
+    loop = asyncio.get_event_loop()
+    if kwargs:
+        func = functools.partial(func, **kwargs)
+    return await loop.run_in_executor(None, func, *args)
+
+
+async def multi_tile(*args: Any, **kwargs: Any):
+    """ Wraps `rio_tiler.reader.multi_tile,` in a coroutine."""
+    return await run_in_threadpool(reader.multi_tile, *args, **kwargs)
 
 
 def postprocess_tile(
@@ -110,7 +130,7 @@ class RasterTiles(object):
         else:
             self.band_descriptions = responses[0][4]
 
-    def read_tile(
+    async def read_tile(
         self,
         z: int,
         x: int,
@@ -126,7 +146,7 @@ class RasterTiles(object):
         else:
             path = self.path
 
-        return reader.multi_tile(
+        return await multi_tile(
             path,
             x,
             y,
@@ -137,7 +157,7 @@ class RasterTiles(object):
             resampling_method=resampling_method,
         )
 
-    def read_tile_mvt(
+    async def read_tile_mvt(
         self,
         z: int,
         x: int,
@@ -147,7 +167,7 @@ class RasterTiles(object):
         feature_type: str = "point",
     ) -> BinaryIO:
         """Read raster tile data and encode to MVT."""
-        tile, mask = self.read_tile(
+        tile, mask = await self.read_tile(
             z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )
         return mvtEncoder(tile, mask, self.band_descriptions, feature_type=feature_type)

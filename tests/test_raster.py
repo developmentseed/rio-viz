@@ -53,51 +53,52 @@ def test_rastertiles_tile_point_valid():
     }
 
 
-def test_rastertiles_read_tile():
+@pytest.mark.asyncio
+async def test_rastertiles_read_tile():
     """Should work as expected (create rastertiles object and read tile)."""
     r = RasterTiles(cog_path)
     z = 7
     x = 63
     y = 43
-    data, mask = r.read_tile(z, x, y)
+    data, mask = await r.read_tile(z, x, y)
     assert data.shape == (1, 256, 256)
     assert mask.shape == (256, 256)
 
-    data, mask = r.read_tile(z, x, y, tilesize=512, indexes=[1])
+    data, mask = await r.read_tile(z, x, y, tilesize=512, indexes=[1])
     assert data.shape == (1, 512, 512)
     assert mask.shape == (512, 512)
 
-    assert r.read_tile_mvt(z, x, y)
-    assert r.read_tile_mvt(z, x, y, feature_type="polygon")
+    assert await r.read_tile_mvt(z, x, y)
+    assert await r.read_tile_mvt(z, x, y, feature_type="polygon")
 
     # outside tile
     z = 7
     x = 65
     y = 49
     with pytest.raises(TileOutsideBounds):
-        r.read_tile_mvt(z, x, y)
+        await r.read_tile_mvt(z, x, y)
 
     with pytest.raises(TileOutsideBounds):
-        r.read_tile_mvt(z, x, y, feature_type="polygon")
+        await r.read_tile_mvt(z, x, y, feature_type="polygon")
 
     with pytest.raises(TileOutsideBounds):
-        r.read_tile(z, x, y)
+        await r.read_tile(z, x, y)
 
     # MultipleFiles
     r = RasterTiles((cogb1_path, cogb2_path, cogb3_path))
     z = 7
     x = 63
     y = 43
-    data, mask = r.read_tile(z, x, y)
+    data, mask = await r.read_tile(z, x, y)
     assert data.shape == (3, 256, 256)
     assert mask.shape == (256, 256)
 
-    data, mask = r.read_tile(z, x, y, tilesize=512, indexes=[1])
+    data, mask = await r.read_tile(z, x, y, tilesize=512, indexes=[1])
     assert data.shape == (1, 512, 512)
     assert mask.shape == (512, 512)
 
-    assert r.read_tile_mvt(z, x, y)
-    assert r.read_tile_mvt(z, x, y, feature_type="polygon")
+    assert await r.read_tile_mvt(z, x, y)
+    assert await r.read_tile_mvt(z, x, y, feature_type="polygon")
 
 
 def test_rastertiles_metadata():
