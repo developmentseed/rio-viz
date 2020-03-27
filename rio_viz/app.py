@@ -4,6 +4,9 @@ from typing import Any, Optional, Tuple, Union
 
 import re
 import urllib
+from functools import partial
+
+from starlette.concurrency import run_in_threadpool
 
 from rio_viz import version as rioviz_version
 from rio_viz.templates.viewer import viewer_template, simple_viewer_template
@@ -25,6 +28,10 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from fastapi import FastAPI, Query
 import uvicorn
+
+
+_postprocess_tile = partial(run_in_threadpool, postprocess_tile)
+_render = partial(run_in_threadpool, render)
 
 
 class viz(object):
@@ -142,7 +149,7 @@ class viz(object):
                 resampling_method=resampling_method,
             )
 
-            tile = postprocess_tile(
+            tile = await _postprocess_tile(
                 tile, mask, rescale=rescale, color_formula=color_formula
             )
 
@@ -156,7 +163,7 @@ class viz(object):
 
             driver = drivers[ext]
             options = img_profiles.get(driver.lower(), {})
-            content = render(
+            content = await _render(
                 tile, mask, colormap=color_map, img_format=driver, **options
             )
             return TileResponse(content, media_type=mimetype[ext.value])

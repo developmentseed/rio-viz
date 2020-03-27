@@ -1,15 +1,13 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import Any, BinaryIO, Callable, Tuple, Union, Sequence
+from typing import Any, BinaryIO, Tuple, Union, Sequence
 
 import re
-import asyncio
-import functools
 from pathlib import Path
+from functools import partial
 from concurrent import futures
 
 import numpy
-
 
 import rasterio
 from rasterio.warp import transform_bounds
@@ -18,10 +16,16 @@ from rio_tiler import reader
 from rio_tiler import constants
 from rio_tiler.mercator import get_zooms
 from rio_tiler.utils import linear_rescale, _chunks
-from rio_tiler_mvt.mvt import encoder as mvtEncoder
+from rio_tiler_mvt import mvt
 
 from rio_color.operations import parse_operations
 from rio_color.utils import scale_dtype, to_math_type
+
+from starlette.concurrency import run_in_threadpool
+
+
+multi_tile = partial(run_in_threadpool, reader.multi_tile)
+mvt_encoder = partial(run_in_threadpool, mvt.encoder)
 
 
 def _get_info(src_path: str) -> Any:
@@ -46,24 +50,6 @@ def _get_info(src_path: str) -> Any:
             cmap = None
 
     return bounds, center, minzoom, maxzoom, band_descriptions, data_type, cmap
-
-
-# From https://gist.github.com/geospatial-jeff/baf32f44bf2fbd073498e3d92f82523b#file-rio_tiler_asyncio-py-L21
-async def run_in_threadpool(func: Callable, *args: Any, **kwargs: Any):
-    """
-    This method lets us call a blocking function as a coroutine by running it in the event loop's executor.  It's really
-    just a slimmed down version of ``starlette.concurrency.run_in_threadpool``
-    https://github.com/encode/starlette/blob/master/starlette/concurrency.py#L21-L34
-    """
-    loop = asyncio.get_event_loop()
-    if kwargs:
-        func = functools.partial(func, **kwargs)
-    return await loop.run_in_executor(None, func, *args)
-
-
-async def multi_tile(*args: Any, **kwargs: Any):
-    """ Wraps `rio_tiler.reader.multi_tile,` in a coroutine."""
-    return await run_in_threadpool(reader.multi_tile, *args, **kwargs)
 
 
 def postprocess_tile(
@@ -170,7 +156,9 @@ class RasterTiles(object):
         tile, mask = await self.read_tile(
             z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )
-        return mvtEncoder(tile, mask, self.band_descriptions, feature_type=feature_type)
+        return await mvt_encoder(
+            tile, mask, self.band_descriptions, feature_type=feature_type
+        )
 
     def point(self, coordinates: Tuple[float, float]) -> dict:
         """Read point value."""
