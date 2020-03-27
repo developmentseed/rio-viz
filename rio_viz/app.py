@@ -4,6 +4,9 @@ from typing import Any, Optional, Tuple, Union
 
 import re
 import urllib
+from functools import partial
+
+from starlette.concurrency import run_in_threadpool
 
 from rio_viz import version as rioviz_version
 from rio_viz.templates.viewer import viewer_template, simple_viewer_template
@@ -25,6 +28,10 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from fastapi import FastAPI, Query
 import uvicorn
+
+
+_postprocess_tile = partial(run_in_threadpool, postprocess_tile)
+_render = partial(run_in_threadpool, render)
 
 
 class viz(object):
@@ -69,7 +76,7 @@ class viz(object):
             },
             description="Read COG and return a tile",
         )
-        def _mvt(
+        async def _mvt(
             z: int,
             x: int,
             y: int,
@@ -80,7 +87,7 @@ class viz(object):
             resampling_method: str = Query("nearest", title="rasterio resampling"),
         ):
             """Handle /mvt requests."""
-            content = self.raster.read_tile_mvt(
+            content = await self.raster.read_tile_mvt(
                 z,
                 x,
                 y,
@@ -112,7 +119,7 @@ class viz(object):
             response_class=TileResponse,
             description="Read COG and return a tile",
         )
-        def _tile(
+        async def _tile(
             z: int,
             x: int,
             y: int,
@@ -133,7 +140,7 @@ class viz(object):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
             tilesize = scale * 256
-            tile, mask = self.raster.read_tile(
+            tile, mask = await self.raster.read_tile(
                 z,
                 x,
                 y,
@@ -142,7 +149,7 @@ class viz(object):
                 resampling_method=resampling_method,
             )
 
-            tile = postprocess_tile(
+            tile = await _postprocess_tile(
                 tile, mask, rescale=rescale, color_formula=color_formula
             )
 
@@ -156,7 +163,7 @@ class viz(object):
 
             driver = drivers[ext]
             options = img_profiles.get(driver.lower(), {})
-            content = render(
+            content = await _render(
                 tile, mask, colormap=color_map, img_format=driver, **options
             )
             return TileResponse(content, media_type=mimetype[ext.value])

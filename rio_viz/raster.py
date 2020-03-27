@@ -4,10 +4,10 @@ from typing import Any, BinaryIO, Tuple, Union, Sequence
 
 import re
 from pathlib import Path
+from functools import partial
 from concurrent import futures
 
 import numpy
-
 
 import rasterio
 from rasterio.warp import transform_bounds
@@ -16,10 +16,16 @@ from rio_tiler import reader
 from rio_tiler import constants
 from rio_tiler.mercator import get_zooms
 from rio_tiler.utils import linear_rescale, _chunks
-from rio_tiler_mvt.mvt import encoder as mvtEncoder
+from rio_tiler_mvt import mvt
 
 from rio_color.operations import parse_operations
 from rio_color.utils import scale_dtype, to_math_type
+
+from starlette.concurrency import run_in_threadpool
+
+
+multi_tile = partial(run_in_threadpool, reader.multi_tile)
+mvt_encoder = partial(run_in_threadpool, mvt.encoder)
 
 
 def _get_info(src_path: str) -> Any:
@@ -110,7 +116,7 @@ class RasterTiles(object):
         else:
             self.band_descriptions = responses[0][4]
 
-    def read_tile(
+    async def read_tile(
         self,
         z: int,
         x: int,
@@ -126,7 +132,7 @@ class RasterTiles(object):
         else:
             path = self.path
 
-        return reader.multi_tile(
+        return await multi_tile(
             path,
             x,
             y,
@@ -137,7 +143,7 @@ class RasterTiles(object):
             resampling_method=resampling_method,
         )
 
-    def read_tile_mvt(
+    async def read_tile_mvt(
         self,
         z: int,
         x: int,
@@ -147,10 +153,12 @@ class RasterTiles(object):
         feature_type: str = "point",
     ) -> BinaryIO:
         """Read raster tile data and encode to MVT."""
-        tile, mask = self.read_tile(
+        tile, mask = await self.read_tile(
             z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )
-        return mvtEncoder(tile, mask, self.band_descriptions, feature_type=feature_type)
+        return await mvt_encoder(
+            tile, mask, self.band_descriptions, feature_type=feature_type
+        )
 
     def point(self, coordinates: Tuple[float, float]) -> dict:
         """Read point value."""

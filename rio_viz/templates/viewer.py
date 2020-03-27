@@ -35,8 +35,6 @@ def viewer_template(
 
         <link href='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.min.css' rel='stylesheet'>
         <script src='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js'></script>
-
-        <script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
         <script src="http://d3js.org/d3.v4.js"></script>
 
         <style>
@@ -837,10 +835,27 @@ def viewer_template(
           }})
     }})
 
+    const bboxPolygon = (bounds)  => {{
+        return {{
+            'type': 'Feature',
+            'geometry': {{
+                'type': 'Polygon',
+                'coordinates': [[
+                    [bounds[0], bounds[1]],
+                    [bounds[2], bounds[1]],
+                    [bounds[2], bounds[3]],
+                    [bounds[0], bounds[3]],
+                    [bounds[0], bounds[1]]
+                ]]
+            }},
+            'properties': {{}}
+        }}
+    }}
+
     const addAOI = (bounds) => {{
       const geojson = {{
           "type": "FeatureCollection",
-          "features": [turf.bboxPolygon(bounds)]
+          "features": [bboxPolygon(bounds)]
       }}
 
       map.addSource('aoi', {{
@@ -1043,8 +1058,6 @@ def simple_viewer_template(
 
         <link href='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.min.css' rel='stylesheet'>
         <script src='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js'></script>
-
-        <script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
 
         <style>
             body {{ margin:0; padding:0; width:100%; height:100%;}}
@@ -1380,10 +1393,27 @@ def simple_viewer_template(
       switchViz()
     }})
 
+    const bboxPolygon = (bounds)  => {{
+        return {{
+            'type': 'Feature',
+            'geometry': {{
+                'type': 'Polygon',
+                'coordinates': [[
+                    [bounds[0], bounds[1]],
+                    [bounds[2], bounds[1]],
+                    [bounds[2], bounds[3]],
+                    [bounds[0], bounds[3]],
+                    [bounds[0], bounds[1]]
+                ]]
+            }},
+            'properties': {{}}
+        }}
+    }}
+
     const addAOI = (bounds) => {{
       const geojson = {{
           "type": "FeatureCollection",
-          "features": [turf.bboxPolygon(bounds)]
+          "features": [bboxPolygon(bounds)]
       }}
 
       map.addSource('aoi', {{
