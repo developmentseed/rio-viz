@@ -2,16 +2,16 @@
 
 from typing import Any, Optional, Tuple, Union
 
+import os
 import re
-import urllib
+import urllib.parse
 from functools import partial
 
 from starlette.concurrency import run_in_threadpool
 
 from rio_viz import version as rioviz_version
-from rio_viz.templates.viewer import viewer_template, simple_viewer_template
-from rio_viz.raster import postprocess_tile
 
+from rio_viz.raster import postprocess_tile
 from rio_viz.models.mapbox import TileJSON
 from rio_viz.ressources.enums import ImageType, VectorType
 from rio_viz.ressources.common import drivers, mimetype
@@ -23,12 +23,16 @@ from rio_tiler.profiles import img_profiles
 
 from starlette.requests import Request
 from starlette.responses import Response, HTMLResponse
+from starlette.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
 from fastapi import FastAPI, Query
 import uvicorn
 
+
+dir = os.path.dirname(__file__)
+templates = Jinja2Templates(directory=f"{dir}/templates")
 
 _postprocess_tile = partial(run_in_threadpool, postprocess_tile)
 _render = partial(run_in_threadpool, render)
@@ -217,7 +221,7 @@ class viz(object):
             "/metadata",
             responses={200: {"description": "Return the metadata of the COG."}},
         )
-        def _metadata(
+        async def _metadata(
             response: Response,
             pmin: float = 2.0,
             pmax: float = 98.0,
@@ -227,7 +231,15 @@ class viz(object):
             if isinstance(indexes, str):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
-            return self.raster.metadata(percentiles=(pmin, pmax), indexes=indexes)
+            return await self.raster.metadata(percentiles=(pmin, pmax), indexes=indexes)
+
+        @self.app.get(
+            "/info",
+            responses={200: {"description": "Return the metadata of the COG."}},
+        )
+        def _info(response: Response,):
+            """Handle /info requests."""
+            return self.raster.info()
 
         @self.app.get(
             "/point", responses={200: {"description": "Return a point value."}}
@@ -244,12 +256,17 @@ class viz(object):
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _viewer():
-            """Handle /requests."""
-            return viewer_template(
-                f"http://{self.host}:{self.port}",
-                mapbox_access_token=self.token,
-                mapbox_style=self.style,
+        def _viewer(request: Request):
+            """Handle /index.html."""
+            return templates.TemplateResponse(
+                "index.html",
+                {
+                    "request": request,
+                    "endpoint": f"http://{self.host}:{self.port}",
+                    "mapbox_access_token": self.token,
+                    "mapbox_style": self.style,
+                },
+                media_type="text/html",
             )
 
         @self.app.get(
@@ -257,12 +274,17 @@ class viz(object):
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _simple_viewer():
-            """Handle /requests."""
-            return simple_viewer_template(
-                f"http://{self.host}:{self.port}",
-                mapbox_access_token=self.token,
-                mapbox_style=self.style,
+        def _simple_viewer(request: Request):
+            """Handle /index_simple."""
+            return templates.TemplateResponse(
+                "simple.html",
+                {
+                    "request": request,
+                    "endpoint": f"http://{self.host}:{self.port}",
+                    "mapbox_access_token": self.token,
+                    "mapbox_style": self.style,
+                },
+                media_type="text/html",
             )
 
     def get_endpoint_url(self) -> str:

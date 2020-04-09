@@ -6,11 +6,12 @@ from setuptools import setup, find_packages
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler~=2.0a3",
+    "rio-tiler~=2.0a4",
     "rio-tiler-mvt",
     "rio-color",
     "fastapi",
     "uvicorn",
+    "jinja2",
 ]
 
 extra_reqs = {

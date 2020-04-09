@@ -12,7 +12,7 @@ common: &common
     - run:
         name: run pre-commit
         command: |
-          if [[ "$CIRCLE_JOB" == "python-3.6" ]]; then
+          if [[ "$CIRCLE_JOB" == "python-3.7" ]]; then
              ~/.local/bin/pre-commit run --all-files
           fi
     - run:
@@ -70,14 +70,14 @@ workflows:
   version: 2
   build_and_deploy:
     jobs:
-      - "python-3.6":
+      - "python-3.6"
+      - "python-3.7":
           filters:  # required since `deploy` has tag filters AND requires `build`
             tags:
               only: /.*/
-      - "python-3.7"
       - deploy:
           requires:
-            - "python-3.6"
+            - "python-3.7"
           filters:
             tags:
               only: /^[0-9]+.*/

@@ -30,6 +30,12 @@ def test_viz():
     response = client.get("/")
     assert response.status_code == 404
 
+    response = client.get("/index.html")
+    assert response.status_code == 200
+
+    response = client.get("/index_simple.html")
+    assert response.status_code == 200
+
     response = client.get("/tiles/7/64/43.png?rescale=1,10")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"

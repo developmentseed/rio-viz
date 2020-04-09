@@ -101,24 +101,25 @@ async def test_rastertiles_read_tile():
     assert await r.read_tile_mvt(z, x, y, feature_type="polygon")
 
 
-def test_rastertiles_metadata():
+@pytest.mark.asyncio
+async def test_rastertiles_metadata():
     """Should work as expected (create rastertiles object and get metadata)."""
     r = RasterTiles(cog_path)
-    metadata = r.metadata()
+    metadata = await r.metadata()
     assert metadata["band_descriptions"] == [(1, "band1")]
     assert metadata["bounds"]
     assert metadata["statistics"]
     assert len(metadata["statistics"][1]["histogram"][0]) == 10
 
     r = RasterTiles((cogb1_path, cogb2_path, cogb3_path))
-    metadata = r.metadata()
+    metadata = await r.metadata()
     assert metadata["band_descriptions"] == [(1, "cogb1"), (2, "cogb2"), (3, "cogb3")]
     assert metadata["bounds"]
     assert metadata["statistics"]
     assert metadata["dtype"]
     assert len(metadata["statistics"].keys()) == 3
 
-    metadata = r.metadata(indexes=(2,))
+    metadata = await r.metadata(indexes=(2,))
     assert metadata["band_descriptions"] == [(2, "cogb2")]
     assert metadata["bounds"]
     assert metadata["statistics"]
