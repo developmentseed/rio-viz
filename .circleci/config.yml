@@ -76,10 +76,10 @@ workflows:
             tags:
               only: /.*/
       - deploy:
-        requires:
-          - "python-3.7"
-        filters:
-          tags:
-            only: /^[0-9]+.*/
-          branches:
-            ignore: /.*/
+          requires:
+            - "python-3.7"
+          filters:
+            tags:
+              only: /^[0-9]+.*/
+            branches:
+              ignore: /.*/
