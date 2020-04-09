@@ -1,6 +1,6 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import Any, BinaryIO, Tuple, Union, Sequence
+from typing import Any, Dict, BinaryIO, Tuple, Union, Sequence
 
 import re
 from pathlib import Path
@@ -24,6 +24,7 @@ from rio_color.utils import scale_dtype, to_math_type
 from starlette.concurrency import run_in_threadpool
 
 
+multi_meta = partial(run_in_threadpool, reader.multi_metadata)
 multi_tile = partial(run_in_threadpool, reader.multi_tile)
 mvt_encoder = partial(run_in_threadpool, mvt.encoder)
 
@@ -43,7 +44,7 @@ def _get_info(src_path: str) -> Any:
             return name
 
         band_descriptions = [_get_name(ix) for ix in src_dst.indexes]
-        data_type = src_dst.dtypes[0]
+        data_type = src_dst.meta["dtype"]
         try:
             cmap = src_dst.colormap(1)
         except ValueError:
@@ -116,6 +117,19 @@ class RasterTiles(object):
         else:
             self.band_descriptions = responses[0][4]
 
+    def info(self) -> Dict:
+        """Return general info about the images."""
+        return dict(
+            bounds=self.bounds,
+            center=self.center,
+            minzoom=self.minzoom,
+            maxzoom=self.maxzoom,
+            band_descriptions=[
+                (ix + 1, bd) for ix, bd in enumerate(self.band_descriptions)
+            ],
+            dtype=self.data_type,
+        )
+
     async def read_tile(
         self,
         z: int,
@@ -127,7 +141,7 @@ class RasterTiles(object):
     ) -> Tuple[numpy.ndarray, numpy.ndarray]:
         """Read raster tile data and mask."""
         if len(self.path) != 1 and indexes:
-            path = [self.path[ii - 1] for ii in indexes]
+            path: Sequence[str] = [self.path[ii - 1] for ii in indexes]
             indexes = None
         else:
             path = self.path
@@ -173,7 +187,7 @@ class RasterTiles(object):
             "value": {b: r for b, r in zip(self.band_descriptions, results)},
         }
 
-    def metadata(
+    async def metadata(
         self,
         percentiles: Tuple[float, float] = (2.0, 98),
         indexes: Sequence[int] = None,
@@ -187,7 +201,7 @@ class RasterTiles(object):
             ]
 
         if len(self.path) != 1 and indexes:
-            path = [self.path[ii - 1] for ii in indexes]
+            path: Sequence[str] = [self.path[ii - 1] for ii in indexes]
             indexes = None
         else:
             path = self.path
@@ -198,7 +212,7 @@ class RasterTiles(object):
                 dict(bins=[k for k, v in self.colormap.items() if v != (0, 0, 0, 255)])
             )
 
-        results = reader.multi_metadata(
+        results = await multi_meta(
             path,
             indexes=indexes,
             nodata=self.nodata,
