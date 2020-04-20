@@ -444,8 +444,8 @@
         const max1 = scope.config[r].max
         const min2 = scope.config[g].min
         const max2 = scope.config[g].max
-        const min3 = scope.config[r].min
-        const max3 = scope.config[r].max
+        const min3 = scope.config[b].min
+        const max3 = scope.config[b].max
         params.rescale =  `${min1},${max1},${min2},${max2},${min3},${max3}`
       }
       const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
