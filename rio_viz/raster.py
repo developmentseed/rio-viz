@@ -16,7 +16,6 @@ from rio_tiler import reader
 from rio_tiler import constants
 from rio_tiler.mercator import get_zooms
 from rio_tiler.utils import linear_rescale, _chunks
-from rio_tiler_mvt import mvt
 
 from rio_color.operations import parse_operations
 from rio_color.utils import scale_dtype, to_math_type
@@ -26,7 +25,6 @@ from starlette.concurrency import run_in_threadpool
 
 multi_meta = partial(run_in_threadpool, reader.multi_metadata)
 multi_tile = partial(run_in_threadpool, reader.multi_tile)
-mvt_encoder = partial(run_in_threadpool, mvt.encoder)
 
 
 def _get_info(src_path: str) -> Any:
@@ -167,6 +165,10 @@ class RasterTiles(object):
         feature_type: str = "point",
     ) -> BinaryIO:
         """Read raster tile data and encode to MVT."""
+        from rio_tiler_mvt import mvt
+
+        mvt_encoder = partial(run_in_threadpool, mvt.encoder)
+
         tile, mask = await self.read_tile(
             z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )

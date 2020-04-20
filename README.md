@@ -15,19 +15,22 @@ Freely adapted from the great [mapbox/rio-glui](https://github.com/mapbox/rio-gl
 
 You can install rio-viz using pip
 
+Note: 3d visualization features are optional, you'll need to have `cython==0.28` installed before being able to install rio-viz
+
 ```bash 
-$ pip install -U pip cython==0.28
 $ pip install rio-viz
 ```
+with 3d features
+```
+$ pip install -U pip cython==0.28
+$ pip install rio-viz[3d]
+```
 
-or from source
+Built from source
 
 ```bash
 $ git clone https://github.com/developmentseed/rio-viz.git
 $ cd rio-viz
-
-# python-vtzero will only compile with Cython < 0.29
-$ pip install cython==0.28
 $ pip install -e .
 ```
 
