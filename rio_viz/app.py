@@ -258,11 +258,16 @@ class viz(object):
         )
         def _viewer(request: Request):
             """Handle /index.html."""
+            base_url = self.get_endpoint_url()
             return templates.TemplateResponse(
                 "index.html",
                 {
                     "request": request,
-                    "endpoint": f"http://{self.host}:{self.port}",
+                    "tilejson_endpoint": urllib.parse.urljoin(
+                        base_url, "/tilejson.json"
+                    ),
+                    "metadata_endpoint": urllib.parse.urljoin(base_url, "/metadata"),
+                    "point_endpoint": urllib.parse.urljoin(base_url, "/point"),
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
                 },
@@ -276,11 +281,15 @@ class viz(object):
         )
         def _simple_viewer(request: Request):
             """Handle /index_simple."""
+            base_url = self.get_endpoint_url()
             return templates.TemplateResponse(
                 "simple.html",
                 {
                     "request": request,
-                    "endpoint": f"http://{self.host}:{self.port}",
+                    "tilejson_endpoint": urllib.parse.urljoin(
+                        base_url, "/tilejson.json"
+                    ),
+                    "info_endpoint": urllib.parse.urljoin(base_url, "/info"),
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
                 },
