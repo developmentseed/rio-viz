@@ -15,7 +15,7 @@ from rio_viz.models.mapbox import TileJSON
 from rio_viz.ressources.enums import ImageType, VectorType
 from rio_viz.ressources.common import drivers, mimetype
 from rio_viz.ressources.responses import TileResponse
-from rio_viz.templates.template import template_factory
+from rio_viz.templates.template import index_template_factory, simple_template_factory
 
 from rio_tiler.utils import render
 from rio_tiler.colormap import get_colormap
@@ -253,7 +253,7 @@ class viz(object):
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _viewer(template: _TemplateResponse = Depends(template_factory)):
+        def _viewer(template: _TemplateResponse = Depends(index_template_factory)):
             """Handle /index.html."""
             template.context.update(
                 {"mapbox_access_token": self.token, "mapbox_style": self.style}
@@ -265,7 +265,9 @@ class viz(object):
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _simple_viewer(template: _TemplateResponse = Depends(template_factory)):
+        def _simple_viewer(
+            template: _TemplateResponse = Depends(simple_template_factory),
+        ):
             """Handle /index_simple."""
             template.context.update(
                 {"mapbox_access_token": self.token, "mapbox_style": self.style}
