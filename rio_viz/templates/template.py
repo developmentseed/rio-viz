@@ -63,7 +63,8 @@ def create_index_template_factory(
                 # These are overridden in the app itself
                 "mapbox_token": "",
                 "mapbox_style": "basic",
-                "allow_3d": "True",
+                # allow_3d will be overridden in the app itself
+                "allow_3d": "False",
             },
             media_type="text/html",
         )
