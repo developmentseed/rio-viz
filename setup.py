@@ -7,7 +7,6 @@ inst_reqs = [
     "click",
     "rio-cogeo",
     "rio-tiler~=2.0a4",
-    "rio-tiler-mvt",
     "rio-color",
     "fastapi",
     "uvicorn",
@@ -15,8 +14,9 @@ inst_reqs = [
 ]
 
 extra_reqs = {
-    "test": ["requests", "mock", "pytest", "pytest-cov"],
-    "dev": ["mock", "pytest", "pytest-cov", "pre-commit", "pytest-asyncio"],
+    "mvt": ["rio-tiler-mvt"],
+    "test": ["mock", "pytest", "pytest-cov", "pytest-asyncio", "requests"],
+    "dev": ["mock", "pytest", "pytest-cov", "pytest-asyncio", "pre-commit"],
 }
 
 setup(

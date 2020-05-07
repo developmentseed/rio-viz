@@ -30,6 +30,13 @@ from starlette.middleware.gzip import GZipMiddleware
 from fastapi import FastAPI, Query
 import uvicorn
 
+try:
+    import rio_tiler_mvt  # noqa
+
+    has_mvt = True
+except ModuleNotFoundError:
+    has_mvt = False
+
 
 dir = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=f"{dir}/templates")
@@ -265,6 +272,7 @@ class viz(object):
                     "endpoint": f"http://{self.host}:{self.port}",
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
+                    "allow_3d": has_mvt,
                 },
                 media_type="text/html",
             )
