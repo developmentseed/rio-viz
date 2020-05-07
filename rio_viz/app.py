@@ -30,6 +30,13 @@ from starlette.middleware.gzip import GZipMiddleware
 from fastapi import Depends, FastAPI, Query
 import uvicorn
 
+try:
+    import rio_tiler_mvt  # noqa
+
+    has_mvt = True
+except ModuleNotFoundError:
+    has_mvt = False
+
 
 _postprocess_tile = partial(run_in_threadpool, postprocess_tile)
 _render = partial(run_in_threadpool, render)
@@ -154,19 +161,16 @@ class viz(object):
                 tile, mask, rescale=rescale, color_formula=color_formula
             )
 
-            if color_map:
-                color_map = get_colormap(color_map)
-            else:
-                color_map = self.raster.colormap
-
             if not ext:
                 ext = ImageType.jpg if mask.all() else ImageType.png
 
             driver = drivers[ext]
             options = img_profiles.get(driver.lower(), {})
-            content = await _render(
-                tile, mask, colormap=color_map, img_format=driver, **options
+            options["colormap"] = (
+                get_colormap(color_map) if color_map else self.raster.colormap
             )
+
+            content = await _render(tile, mask, img_format=driver, **options)
             return TileResponse(content, media_type=mimetype[ext.value])
 
         @self.app.get(
@@ -256,7 +260,11 @@ class viz(object):
         def _viewer(template: _TemplateResponse = Depends(index_template_factory)):
             """Handle /index.html."""
             template.context.update(
-                {"mapbox_access_token": self.token, "mapbox_style": self.style}
+                {
+                    "mapbox_access_token": self.token,
+                    "mapbox_style": self.style,
+                    "allow_3d": has_mvt,
+                }
             )
             return template
 

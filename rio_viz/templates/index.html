@@ -253,11 +253,11 @@
               <input value="raster" checked="checked" name='toggle-viz' type='radio' />
               <div title='Raster Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w18 h18'><use xlink:href='#icon-raster'/></svg></div>
             </label>
-            <label class='toggle-container'>
+            <label id='3d-point' class='toggle-container'>
               <input value="point" name='toggle-viz' type='radio' />
               <div title='Point Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w18 h18'><use xlink:href='#icon-circle'/></svg></div>
             </label>
-            <label class='toggle-container'>
+            <label id='3d-poly'  class='toggle-container'>
               <input value="polygon" name='toggle-viz' type='radio' />
               <div title='3D Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w18 h18'><use xlink:href='#icon-extrusion'/></div>
             </label>
@@ -365,6 +365,11 @@
     const tilejson_endpoint = `{{ tilejson_endpoint }}`
     const metadata_endpoint = `{{ metadata_endpoint }}`
     const point_endpoint = `{{ point_endpoint }}`
+
+    if ('{{ allow_3d }}' !== "True") {
+      document.getElementById('3d-point').classList.add('none')
+      document.getElementById('3d-poly').classList.add('none')
+    }
 
     let style
     if (mapboxgl.accessToken !== '') {
