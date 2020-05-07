@@ -21,7 +21,7 @@ extra_reqs = {
 
 setup(
     name="rio-viz",
-    version="0.1.0",
+    version="0.2.0",
     python_requires=">=3",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
     classifiers=[
