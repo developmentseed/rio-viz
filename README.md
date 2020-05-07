@@ -67,6 +67,20 @@ rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature w
 ![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
 
 
+### Template Factories
+The HTML templates provided by rio-viz may be [injected](https://fastapi.tiangolo.com/tutorial/dependencies/) into an
+external FastAPI app using the factory functions defined in `rio_viz.templates.template`.  This allows the raw HTML to
+be reused in external applications without deploying rio-viz.  The parameters passed to each factory define which
+endpoints are used by the template.  For example, if the path operation to create a tilejson is bound to the
+`create_tilejson` function and the path operation to read metadata about a COG is bound to the `read_info` function, a
+dependency can be created as follows:
+
+```python
+from rio_viz.templates.template import create_simple_template_factory
+
+dependency = create_simple_template_factory(tilejson="create_tilejson", info="read_info")
+```
+
 ## Contribution & Development
 
 Issues and pull requests are more than welcome.

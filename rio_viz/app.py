@@ -2,7 +2,6 @@
 
 from typing import Any, Optional, Tuple, Union
 
-import os
 import re
 import urllib.parse
 from functools import partial
@@ -16,6 +15,7 @@ from rio_viz.models.mapbox import TileJSON
 from rio_viz.ressources.enums import ImageType, VectorType
 from rio_viz.ressources.common import drivers, mimetype
 from rio_viz.ressources.responses import TileResponse
+from rio_viz.templates.template import index_template_factory, simple_template_factory
 
 from rio_tiler.utils import render
 from rio_tiler.colormap import get_colormap
@@ -23,11 +23,11 @@ from rio_tiler.profiles import img_profiles
 
 from starlette.requests import Request
 from starlette.responses import Response, HTMLResponse
-from starlette.templating import Jinja2Templates
+from starlette.templating import _TemplateResponse
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, Query
 import uvicorn
 
 try:
@@ -37,9 +37,6 @@ try:
 except ModuleNotFoundError:
     has_mvt = False
 
-
-dir = os.path.dirname(__file__)
-templates = Jinja2Templates(directory=f"{dir}/templates")
 
 _postprocess_tile = partial(run_in_threadpool, postprocess_tile)
 _render = partial(run_in_threadpool, render)
@@ -164,19 +161,16 @@ class viz(object):
                 tile, mask, rescale=rescale, color_formula=color_formula
             )
 
-            if color_map:
-                color_map = get_colormap(color_map)
-            else:
-                color_map = self.raster.colormap
-
             if not ext:
                 ext = ImageType.jpg if mask.all() else ImageType.png
 
             driver = drivers[ext]
             options = img_profiles.get(driver.lower(), {})
-            content = await _render(
-                tile, mask, colormap=color_map, img_format=driver, **options
+            options["colormap"] = (
+                get_colormap(color_map) if color_map else self.raster.colormap
             )
+
+            content = await _render(tile, mask, img_format=driver, **options)
             return TileResponse(content, media_type=mimetype[ext.value])
 
         @self.app.get(
@@ -263,37 +257,30 @@ class viz(object):
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _viewer(request: Request):
+        def _viewer(template: _TemplateResponse = Depends(index_template_factory)):
             """Handle /index.html."""
-            return templates.TemplateResponse(
-                "index.html",
+            template.context.update(
                 {
-                    "request": request,
-                    "endpoint": f"http://{self.host}:{self.port}",
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
                     "allow_3d": has_mvt,
-                },
-                media_type="text/html",
+                }
             )
+            return template
 
         @self.app.get(
             "/index_simple.html",
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _simple_viewer(request: Request):
+        def _simple_viewer(
+            template: _TemplateResponse = Depends(simple_template_factory),
+        ):
             """Handle /index_simple."""
-            return templates.TemplateResponse(
-                "simple.html",
-                {
-                    "request": request,
-                    "endpoint": f"http://{self.host}:{self.port}",
-                    "mapbox_access_token": self.token,
-                    "mapbox_style": self.style,
-                },
-                media_type="text/html",
+            template.context.update(
+                {"mapbox_access_token": self.token, "mapbox_style": self.style}
             )
+            return template
 
     def get_endpoint_url(self) -> str:
         """Get endpoint url."""

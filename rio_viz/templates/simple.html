@@ -296,7 +296,9 @@
         var scope = { metadata: {}, config: {} }
 
         mapboxgl.accessToken = '{{ mapbox_access_token  }}'
-        const api_endpoint = '{{ endpoint }}'
+        const tilejson_endpoint = '{{ tilejson_endpoint }}'
+        const info_endpoint = '{{ info_endpoint }}'
+
 
         let style
         if (mapboxgl.accessToken !== '') {
@@ -339,7 +341,7 @@
             if (cmap.value !== 'b&w') params.color_map = cmap.value
 
             const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-            let url = `${api_endpoint}/tilejson.json?${url_params}`
+            let url = `${tilejson_endpoint}?${url_params}`
             console.log(url)
             map.addSource('raster', { type: 'raster', url: url, tileSize: 512 })
             map.addLayer({
@@ -416,7 +418,7 @@
         }
 
         map.on('load', () => {
-            fetch(`${api_endpoint}/info`)
+            fetch(`${info_endpoint}`)
                 .then(res => {
                     if (res.ok) return res.json()
                     throw new Error('Network response was not ok.')

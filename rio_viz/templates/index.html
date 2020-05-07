@@ -361,7 +361,10 @@
     var scope = { metadata: {}, config: {} }
 
     mapboxgl.accessToken = '{{ mapbox_access_token  }}'
-    const api_endpoint = '{{ endpoint }}'
+
+    const tilejson_endpoint = `{{ tilejson_endpoint }}`
+    const metadata_endpoint = `{{ metadata_endpoint }}`
+    const point_endpoint = `{{ point_endpoint }}`
 
     if ('{{ allow_3d }}' !== "True") {
       document.getElementById('3d-point').classList.add('none')
@@ -407,7 +410,7 @@
           if (cmap.value !== 'b&w') params.color_map = cmap.value
 
           const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-          let url = `${api_endpoint}/tilejson.json?${url_params}`
+          let url = `${tilejson_endpoint}?${url_params}`
 
           map.addSource('raster', { type: 'raster', url: url , tileSize: 512})
           addLayer(vizType)
@@ -416,7 +419,7 @@
         case 'point':
           map.addSource('mvt', {
             type: 'vector',
-            url: `${api_endpoint}/tilejson.json?tile_format=pbf&feature_type=point&resampling_method=${params.resampling_method}`
+            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=point&resampling_method=${params.resampling_method}`
           })
           addLayer(vizType)
           break
@@ -424,7 +427,7 @@
         case 'polygon':
           map.addSource('mvt', {
             type: 'vector',
-            url: `${api_endpoint}/tilejson.json?tile_format=pbf&feature_type=polygon&resampling_method=${params.resampling_method}`
+            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=polygon&resampling_method=${params.resampling_method}`
           })
           addLayer(vizType)
           break
@@ -454,7 +457,9 @@
         params.rescale =  `${min1},${max1},${min2},${max2},${min3},${max3}`
       }
       const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-      let url = `${api_endpoint}/tilejson.json?${url_params}`
+      let url = `${tilejson_endpoint}?${url_params}`
+
+
       map.addSource('raster', { type: 'raster', url: url, tileSize: 512})
       map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
       addHisto3Bands()
@@ -794,7 +799,7 @@
             pmax = 95.0
           break
       }
-      fetch(`${api_endpoint}/metadata?pmin=${pmin}&pmax=${pmax}`)
+      fetch(`${metadata_endpoint}?pmin=${pmin}&pmax=${pmax}`)
           .then(res => {
             if (res.ok) return res.json()
             throw new Error('Network response was not ok.')
@@ -900,7 +905,7 @@
           (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
         ) {
           const coord = `${e.lngLat.lng},${e.lngLat.lat}`
-          fetch(`${api_endpoint}/point?coordinates=${coord}`)
+          fetch(`${point_endpoint}?coordinates=${coord}`)
             .then(res => {
               if (res.ok) return res.json()
               throw new Error('Network response was not ok.');
@@ -926,7 +931,7 @@
         }
       })
 
-      fetch(`${api_endpoint}/metadata`)
+      fetch(`${metadata_endpoint}`)
         .then(res => {
           if (res.ok) return res.json()
           throw new Error('Network response was not ok.')
