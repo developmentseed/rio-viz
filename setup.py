@@ -14,7 +14,7 @@ inst_reqs = [
 ]
 
 extra_reqs = {
-    "3d": ["rio-tiler-mvt"],
+    "mvt": ["rio-tiler-mvt"],
     "test": ["mock", "pytest", "pytest-cov", "pytest-asyncio", "requests"],
     "dev": ["mock", "pytest", "pytest-cov", "pytest-asyncio", "pre-commit"],
 }

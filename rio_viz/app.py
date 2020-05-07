@@ -33,9 +33,9 @@ import uvicorn
 try:
     import rio_tiler_mvt  # noqa
 
-    has_3d = True
+    has_mvt = True
 except ModuleNotFoundError:
-    has_3d = False
+    has_mvt = False
 
 
 dir = os.path.dirname(__file__)
@@ -272,7 +272,7 @@ class viz(object):
                     "endpoint": f"http://{self.host}:{self.port}",
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
-                    "allow_3d": has_3d,
+                    "allow_3d": has_mvt,
                 },
                 media_type="text/html",
             )

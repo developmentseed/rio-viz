@@ -23,7 +23,7 @@ $ pip install rio-viz
 with 3d features
 ```
 $ pip install -U pip cython==0.28
-$ pip install rio-viz[3d]
+$ pip install rio-viz[mvt]
 ```
 
 Built from source
