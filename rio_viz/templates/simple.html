@@ -192,7 +192,6 @@
             }
 
             @media(max-width: 767px) {
-
                 #menu.off {
                     left: -240px;
                     -o-transition: all .5s ease;
@@ -225,6 +224,25 @@
                     <div class='select-arrow color-black'></div>
                 </div>
 
+                <!-- Resampling -->
+                <div class='px12 pt12 pb6'>
+                    <div class='txt-h5 mt6 mb6 color-black'>Resampling Method</div>
+                    <div id='resamp-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
+                        <label class='toggle-container'>
+                            <input value='bilinear' name='toggle-resamp' type='radio' />
+                            <div title='bilinear' class='toggle color-gray-dark-on-hover'>bilinear</div>
+                        </label>
+                        <label class='toggle-container'>
+                            <input value='cubic' name='toggle-resamp' type='radio' />
+                            <div title='cubic' class='toggle color-gray-dark-on-hover'>cubic</div>
+                        </label>
+                        <label class='toggle-container'>
+                            <input value='nearest' checked='checked' name='toggle-resamp' type='radio' />
+                            <div title='nearest' class='toggle color-gray-dark-on-hover'>nearest</div>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Color Map -->
                 <div id='colormap-section'>
                     <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'>
@@ -249,33 +267,20 @@
                 </div>
             </section>
 
-            <div id='rescale-section' class='none'>
-                <div class='txt-h5 mt6 mb6 color-black'>Histogram min/max</div>
-                <div class='px6 py6'>
+            <div id='rescale-section' class='px6 py6 none'>
+                <div class='txt-h5 mb6 color-black'>Histogram min/max</div>
+                <div>
                     <input id="min-value" class='input input--s wmax60 inline-block align-center color-black' value='0' />
                     <input id="max-value" class='input input--s wmax60 inline-block align-center color-black' value='1000' />
-                    <button id="updateRescale" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black ml12'>Apply</button>
                 </div>
             </div>
 
-            <!-- Resampling -->
-            <div class='px12 pt12 pb6'>
-                <div class='txt-h5 mt6 mb6 color-black'>Resampling Method</div>
-                <div id='resamp-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
-                    <label class='toggle-container'>
-                        <input value='bilinear' name='toggle-resamp' type='radio' />
-                        <div title='bilinear' class='toggle color-gray-dark-on-hover'>bilinear</div>
-                    </label>
-                    <label class='toggle-container'>
-                        <input value='cubic' name='toggle-resamp' type='radio' />
-                        <div title='cubic' class='toggle color-gray-dark-on-hover'>cubic</div>
-                    </label>
-                    <label class='toggle-container'>
-                        <input value='nearest' checked='checked' name='toggle-resamp' type='radio' />
-                        <div title='nearest' class='toggle color-gray-dark-on-hover'>nearest</div>
-                    </label>
-                </div>
+            <div id='cformula-section' class='px6 py6'>
+                <div class='txt-h5 mb6 color-black'>Color Formula</div>
+                <input id="ColorFormulaValue" class='input input--s w-full color-black' value='' />
             </div>
+            <button id="updateColor" class='btn bts--xs btn--stroke bg-darken25-on-hover txt-s color-black ml12'>Apply</button>
+
         </div>
         <button id='btn-hide'><svg id='hide-arrow' class='icon'><use xlink:href='#icon-arrow-right' /></svg></button>
     </div>
@@ -336,6 +341,10 @@
                 const maxV = parseFloat(document.getElementById('max-value').value)
                 params.rescale = `${minV},${maxV}`
             }
+            
+            if (document.getElementById('ColorFormulaValue').value !== '') {
+                params.color_formula = document.getElementById('ColorFormulaValue').value
+            }
 
             const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
             if (cmap.value !== 'b&w') params.color_map = cmap.value
@@ -369,7 +378,7 @@
             switchViz()
         })
 
-        document.getElementById('updateRescale').addEventListener('click', () => {
+        document.getElementById('updateColor').addEventListener('click', () => {
             switchViz()
         })
 
