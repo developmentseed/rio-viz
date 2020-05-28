@@ -18,7 +18,7 @@ from rio_viz.ressources.responses import TileResponse
 from rio_viz.templates.template import index_template_factory, simple_template_factory
 
 from rio_tiler.utils import render
-from rio_tiler.colormap import get_colormap
+from rio_tiler.colormap import cmap
 from rio_tiler.profiles import img_profiles
 
 from starlette.requests import Request
@@ -167,7 +167,7 @@ class viz(object):
             driver = drivers[ext]
             options = img_profiles.get(driver.lower(), {})
             options["colormap"] = (
-                get_colormap(color_map) if color_map else self.raster.colormap
+                cmap.get(color_map) if color_map else self.raster.colormap
             )
 
             content = await _render(tile, mask, img_format=driver, **options)
