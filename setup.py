@@ -2,6 +2,9 @@
 
 from setuptools import setup, find_packages
 
+with open("README.md") as f:
+    long_description = f.read()
+
 # Runtime requirements.
 inst_reqs = [
     "click",
@@ -24,6 +27,8 @@ setup(
     version="0.2.1",
     python_requires=">=3",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     classifiers=[
         "Intended Audience :: Information Technology",
         "Intended Audience :: Science/Research",
