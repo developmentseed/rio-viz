@@ -352,7 +352,7 @@
             const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
             let url = `${tilejson_endpoint}?${url_params}`
             console.log(url)
-            map.addSource('raster', { type: 'raster', url: url, tileSize: 512 })
+            map.addSource('raster', { type: 'raster', url: url, tileSize: 256 })
             map.addLayer({
                 id: 'raster',
                 type: 'raster',
@@ -426,6 +426,20 @@
             return
         }
 
+        const truncate_lnglat = (lng, lat) => {
+            if (lng > 180.0) {
+                lng = 180.0
+            } else if (lng < -180.0) {
+                lng = -180.0
+            }
+            if (lat > 90.0) {
+                lat = 90.0
+            } else if (lat < -90.0) {
+                lat = -90.0
+            }
+            return [lng, lat]
+        }
+
         map.on('load', () => {
             fetch(`${info_endpoint}`)
                 .then(res => {
@@ -456,7 +470,10 @@
                     document.getElementById('menu').classList.toggle('off')
 
                     const bounds = scope.metadata.bounds
-                    map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
+                    const ll = truncate_lnglat(bounds[0], bounds[1])
+                    const ur = truncate_lnglat(bounds[2], bounds[3])
+                    map.fitBounds([ll, ur])
+
                     addAOI(bounds)
 
                     switchViz()

@@ -865,6 +865,20 @@
       return
     }
 
+    const truncate_lnglat = (lng, lat) => {
+      if (lng > 180.0) {
+        lng = 180.0
+      } else if (lng < -180.0) {
+        lng = -180.0
+      }
+      if (lat > 90.0) {
+        lat = 90.0
+      } else if (lat < -90.0) {
+        lat = -90.0
+      }
+      return [lng, lat]
+    }
+
     map.on('load', () => {
       map.on('mousemove', (e) => {
         if (!map.getLayer('mvt')) return
@@ -1004,7 +1018,9 @@
           document.getElementById('menu').classList.toggle('off')
 
           const bounds = scope.metadata.bounds
-          map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
+          const ll = truncate_lnglat(bounds[0], bounds[1])
+          const ur = truncate_lnglat(bounds[2], bounds[3])
+          map.fitBounds([ll, ur])
           addAOI(bounds)
 
           if (nbands === 1) {
