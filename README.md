@@ -37,13 +37,15 @@ $ pip install -e .
 ### How To
 
 ```bash 
-$  rio viz --help
+$ rio viz --help                                                                                                                  
 Usage: rio viz [OPTIONS] SRC_PATHS...
 
   Rasterio Viz cli.
 
 Options:
   --nodata NUMBER|nan        Set nodata masking values for input dataset.
+  --minzoom INTEGER          Overwrite minzoom
+  --maxzoom INTEGER          Overwrite maxzoom
   --style [satellite|basic]  Mapbox basemap
   --port INTEGER             Webserver port (default: 8080)
   --host TEXT                Webserver host url (default: 127.0.0.1)

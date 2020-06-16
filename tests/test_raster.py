@@ -23,6 +23,10 @@ def test_rastertiles_valid():
     assert r.maxzoom == 8
     assert r.band_descriptions == ["band1"]
 
+    r = RasterTiles(cog_path, minzoom=0)
+    assert r.path == (cog_path,)
+    assert r.minzoom == 0
+
     r = RasterTiles((cog_path,))
     assert r.path == (cog_path,)
 

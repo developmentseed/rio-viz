@@ -76,6 +76,12 @@ class NodataParamType(click.ParamType):
     help="Set nodata masking values for input dataset.",
 )
 @click.option(
+    "--minzoom", type=int, help="Overwrite minzoom",
+)
+@click.option(
+    "--maxzoom", type=int, help="Overwrite maxzoom",
+)
+@click.option(
     "--style",
     type=click.Choice(["satellite", "basic"]),
     default="basic",
@@ -97,7 +103,18 @@ class NodataParamType(click.ParamType):
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
 @click.option("--simple", is_flag=True, default=False, help="Launch simple viewer")
-def viz(src_paths, nodata, style, port, host, mapbox_token, no_check, simple):
+def viz(
+    src_paths,
+    nodata,
+    minzoom,
+    maxzoom,
+    style,
+    port,
+    host,
+    mapbox_token,
+    no_check,
+    simple,
+):
     """Rasterio Viz cli."""
     # Check if cog
     src_paths = list(src_paths)
@@ -119,7 +136,9 @@ def viz(src_paths, nodata, style, port, host, mapbox_token, no_check, simple):
                 cog_translate(src_path, tmp_path.name, output_profile, config=config)
                 src_paths[ii] = tmp_path.name
 
-        src_dst = raster.RasterTiles(src_paths, nodata=nodata)
+        src_dst = raster.RasterTiles(
+            src_paths, nodata=nodata, minzoom=minzoom, maxzoom=maxzoom
+        )
         application = app.viz(
             src_dst, token=mapbox_token, port=port, host=host, style=style
         )

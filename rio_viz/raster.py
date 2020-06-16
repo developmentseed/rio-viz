@@ -1,6 +1,6 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import Any, Dict, BinaryIO, Tuple, Union, Sequence
+from typing import Any, Dict, BinaryIO, Tuple, Union, Sequence, Optional
 
 import re
 from pathlib import Path
@@ -87,7 +87,13 @@ def postprocess_tile(
 class RasterTiles(object):
     """Raster tiles object."""
 
-    def __init__(self, src_path: Sequence[str], nodata: Union[str, int, float] = None):
+    def __init__(
+        self,
+        src_path: Sequence[str],
+        nodata: Union[str, int, float] = None,
+        minzoom: Optional[int] = None,
+        maxzoom: Optional[int] = None,
+    ):
         """Initialize RasterTiles object."""
         if isinstance(src_path, str):
             src_path = (src_path,)
@@ -100,8 +106,8 @@ class RasterTiles(object):
 
         self.bounds = responses[0][0]
         self.center = responses[0][1]
-        self.minzoom = responses[0][2]
-        self.maxzoom = responses[0][3]
+        self.minzoom = minzoom if minzoom is not None else responses[0][2]
+        self.maxzoom = maxzoom if maxzoom is not None else responses[0][3]
         self.data_type = responses[0][5]
         self.colormap = responses[0][6]
 
