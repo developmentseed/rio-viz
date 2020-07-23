@@ -148,7 +148,7 @@ class viz(object):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
             tilesize = scale * 256
-            tile, mask = await self.raster.read_tile(
+            tile, mask = self.raster.read_tile(
                 z,
                 x,
                 y,
@@ -232,7 +232,7 @@ class viz(object):
             if isinstance(indexes, str):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
-            return await self.raster.metadata(percentiles=(pmin, pmax), indexes=indexes)
+            return self.raster.metadata(pmin, pmax, indexes=indexes)
 
         @self.app.get(
             "/info",

@@ -3,7 +3,7 @@
 import os
 import pytest
 
-from mock import patch
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
