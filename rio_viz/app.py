@@ -75,7 +75,7 @@ class viz(object):
         self.token = token
 
         @self.app.get(
-            "/tiles/{z}/{x}/{y}\\.pbf",
+            "/tiles/{z}/{x}/{y}.pbf",
             responses={
                 200: {
                     "content": {"application/x-protobuf": {}},
@@ -117,7 +117,7 @@ class viz(object):
             description="Read COG and return a tile",
         )
         @self.app.get(
-            r"/tiles/{z}/{x}/{y}\.{ext}",
+            r"/tiles/{z}/{x}/{y}.{ext}",
             responses={
                 200: {
                     "content": {"image/png": {}, "image/jpg": {}, "image/webp": {}},
@@ -148,7 +148,7 @@ class viz(object):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
             tilesize = scale * 256
-            tile, mask = await self.raster.read_tile(
+            tile, mask = self.raster.read_tile(
                 z,
                 x,
                 y,
@@ -177,16 +177,7 @@ class viz(object):
             "/tilejson.json",
             response_model=TileJSON,
             responses={200: {"description": "Return a tilejson"}},
-            response_model_include={
-                "tilejson",
-                "scheme",
-                "version",
-                "minzoom",
-                "maxzoom",
-                "bounds",
-                "center",
-                "tiles",
-            },  # https://github.com/tiangolo/fastapi/issues/528#issuecomment-589659378
+            response_model_exclude_none=True,
         )
         def _tilejson(
             request: Request,
@@ -232,7 +223,7 @@ class viz(object):
             if isinstance(indexes, str):
                 indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
 
-            return await self.raster.metadata(percentiles=(pmin, pmax), indexes=indexes)
+            return self.raster.metadata(pmin, pmax, indexes=indexes)
 
         @self.app.get(
             "/info",

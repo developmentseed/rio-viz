@@ -48,6 +48,10 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
+    response = client.get("/tiles/7/64/43?rescale=1,10&color_map=cfastie")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
     with pytest.raises(TileOutsideBounds):
         client.get("/tiles/18/8624/119094.png")
 

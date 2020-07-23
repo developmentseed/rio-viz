@@ -1,6 +1,6 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import Any, Dict, BinaryIO, Tuple, Union, Sequence, Optional
+from typing import Dict, BinaryIO, Tuple, Union, Sequence, Optional
 
 import re
 from pathlib import Path
@@ -9,12 +9,9 @@ from concurrent import futures
 
 import numpy
 
-import rasterio
-from rasterio.warp import transform_bounds
+from rio_tiler.io import COGReader
+from rio_tiler.io.cogeo import multi_metadata, multi_tile, multi_point
 
-from rio_tiler import reader
-from rio_tiler import constants
-from rio_tiler.mercator import get_zooms
 from rio_tiler.utils import linear_rescale, _chunks
 
 from rio_color.operations import parse_operations
@@ -23,32 +20,12 @@ from rio_color.utils import scale_dtype, to_math_type
 from starlette.concurrency import run_in_threadpool
 
 
-multi_meta = partial(run_in_threadpool, reader.multi_metadata)
-multi_tile = partial(run_in_threadpool, reader.multi_tile)
-
-
-def _get_info(src_path: str) -> Any:
-    with rasterio.open(src_path) as src_dst:
-        bounds = transform_bounds(
-            src_dst.crs, constants.WGS84_CRS, *src_dst.bounds, densify_pts=21
-        )
-        minzoom, maxzoom = get_zooms(src_dst)
-        center = ((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2, minzoom)
-
-        def _get_name(ix):
-            name = src_dst.descriptions[ix - 1]
-            if not name:
-                name = f"band{ix}"
-            return name
-
-        band_descriptions = [_get_name(ix) for ix in src_dst.indexes]
-        data_type = src_dst.meta["dtype"]
-        try:
-            cmap = src_dst.colormap(1)
-        except ValueError:
-            cmap = None
-
-    return bounds, center, minzoom, maxzoom, band_descriptions, data_type, cmap
+def _get_info(src_path: str) -> Dict:
+    with COGReader(src_path) as cog:
+        info = cog.info.copy()
+        info["dtype"] = cog.dataset.meta["dtype"]
+        info["band_descriptions"] = [band for _, band in info["band_descriptions"]]
+    return info
 
 
 def postprocess_tile(
@@ -104,22 +81,22 @@ class RasterTiles(object):
         with futures.ThreadPoolExecutor() as executor:
             responses = list(executor.map(_get_info, self.path))
 
-        self.bounds = responses[0][0]
-        self.center = responses[0][1]
-        self.minzoom = minzoom if minzoom is not None else responses[0][2]
-        self.maxzoom = maxzoom if maxzoom is not None else responses[0][3]
-        self.data_type = responses[0][5]
-        self.colormap = responses[0][6]
+        self.bounds = responses[0]["bounds"]
+        self.center = responses[0]["center"]
+        self.minzoom = minzoom if minzoom is not None else responses[0]["minzoom"]
+        self.maxzoom = maxzoom if maxzoom is not None else responses[0]["maxzoom"]
+        self.data_type = responses[0]["dtype"]
+        self.colormap = responses[0].get("colormap")
 
         if len(self.path) != 1:
             self.band_descriptions = [
                 Path(p).stem
-                if re.match(r"^band[0-9]+$", responses[idx][4][0])
-                else responses[idx][4][0]
+                if re.match(r"^band[0-9]+$", responses[idx]["band_descriptions"][0])
+                else responses[idx]["band_descriptions"][0]
                 for idx, p in enumerate(self.path)
             ]
         else:
-            self.band_descriptions = responses[0][4]
+            self.band_descriptions = responses[0]["band_descriptions"]
 
     def info(self) -> Dict:
         """Return general info about the images."""
@@ -134,7 +111,7 @@ class RasterTiles(object):
             dtype=self.data_type,
         )
 
-    async def read_tile(
+    def read_tile(
         self,
         z: int,
         x: int,
@@ -150,7 +127,7 @@ class RasterTiles(object):
         else:
             path = self.path
 
-        return await multi_tile(
+        return multi_tile(
             path,
             x,
             y,
@@ -175,7 +152,7 @@ class RasterTiles(object):
 
         mvt_encoder = partial(run_in_threadpool, mvt.encoder)
 
-        tile, mask = await self.read_tile(
+        tile, mask = self.read_tile(
             z, x, y, tilesize=tilesize, resampling_method=resampling_method
         )
         return await mvt_encoder(
@@ -184,7 +161,7 @@ class RasterTiles(object):
 
     def point(self, coordinates: Tuple[float, float]) -> dict:
         """Read point value."""
-        results = reader.multi_point(self.path, coordinates=coordinates)
+        results = multi_point(self.path, *coordinates)
         if len(self.path) != 1:
             results = [r[0] for r in results]
         else:
@@ -195,10 +172,8 @@ class RasterTiles(object):
             "value": {b: r for b, r in zip(self.band_descriptions, results)},
         }
 
-    async def metadata(
-        self,
-        percentiles: Tuple[float, float] = (2.0, 98),
-        indexes: Sequence[int] = None,
+    def metadata(
+        self, pmin: float = 2.0, pmax: float = 98.0, indexes: Sequence[int] = None,
     ) -> dict:
         """Get Raster metadata."""
         if indexes:
@@ -220,11 +195,12 @@ class RasterTiles(object):
                 dict(bins=[k for k, v in self.colormap.items() if v != (0, 0, 0, 255)])
             )
 
-        results = await multi_meta(
+        results = multi_metadata(
             path,
+            pmin,
+            pmax,
             indexes=indexes,
             nodata=self.nodata,
-            percentiles=percentiles,
             hist_options=hist_options,
         )
 

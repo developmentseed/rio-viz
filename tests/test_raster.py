@@ -64,11 +64,11 @@ async def test_rastertiles_read_tile():
     z = 7
     x = 63
     y = 43
-    data, mask = await r.read_tile(z, x, y)
+    data, mask = r.read_tile(z, x, y)
     assert data.shape == (1, 256, 256)
     assert mask.shape == (256, 256)
 
-    data, mask = await r.read_tile(z, x, y, tilesize=512, indexes=[1])
+    data, mask = r.read_tile(z, x, y, tilesize=512, indexes=[1])
     assert data.shape == (1, 512, 512)
     assert mask.shape == (512, 512)
 
@@ -86,18 +86,18 @@ async def test_rastertiles_read_tile():
         await r.read_tile_mvt(z, x, y, feature_type="polygon")
 
     with pytest.raises(TileOutsideBounds):
-        await r.read_tile(z, x, y)
+        r.read_tile(z, x, y)
 
     # MultipleFiles
     r = RasterTiles((cogb1_path, cogb2_path, cogb3_path))
     z = 7
     x = 63
     y = 43
-    data, mask = await r.read_tile(z, x, y)
+    data, mask = r.read_tile(z, x, y)
     assert data.shape == (3, 256, 256)
     assert mask.shape == (256, 256)
 
-    data, mask = await r.read_tile(z, x, y, tilesize=512, indexes=[1])
+    data, mask = r.read_tile(z, x, y, tilesize=512, indexes=[1])
     assert data.shape == (1, 512, 512)
     assert mask.shape == (512, 512)
 
@@ -109,21 +109,21 @@ async def test_rastertiles_read_tile():
 async def test_rastertiles_metadata():
     """Should work as expected (create rastertiles object and get metadata)."""
     r = RasterTiles(cog_path)
-    metadata = await r.metadata()
+    metadata = r.metadata()
     assert metadata["band_descriptions"] == [(1, "band1")]
     assert metadata["bounds"]
     assert metadata["statistics"]
     assert len(metadata["statistics"][1]["histogram"][0]) == 10
 
     r = RasterTiles((cogb1_path, cogb2_path, cogb3_path))
-    metadata = await r.metadata()
+    metadata = r.metadata()
     assert metadata["band_descriptions"] == [(1, "cogb1"), (2, "cogb2"), (3, "cogb3")]
     assert metadata["bounds"]
     assert metadata["statistics"]
     assert metadata["dtype"]
     assert len(metadata["statistics"].keys()) == 3
 
-    metadata = await r.metadata(indexes=(2,))
+    metadata = r.metadata(indexes=(2,))
     assert metadata["band_descriptions"] == [(2, "cogb2")]
     assert metadata["bounds"]
     assert metadata["statistics"]

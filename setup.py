@@ -9,22 +9,22 @@ with open("README.md") as f:
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler~=2.0a9",
+    "rio-tiler~=2.0b2",
     "rio-color",
-    "fastapi",
+    "fastapi~=0.60.1",
     "uvicorn",
     "jinja2",
 ]
 
 extra_reqs = {
     "mvt": ["rio-tiler-mvt"],
-    "test": ["mock", "pytest", "pytest-cov", "pytest-asyncio", "requests"],
-    "dev": ["mock", "pytest", "pytest-cov", "pytest-asyncio", "pre-commit"],
+    "test": ["pytest", "pytest-cov", "pytest-asyncio", "requests"],
+    "dev": ["pytest", "pytest-cov", "pytest-asyncio", "pre-commit"],
 }
 
 setup(
     name="rio-viz",
-    version="0.2.3",
+    version="0.3.0",
     python_requires=">=3",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
     long_description=long_description,
