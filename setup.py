@@ -11,7 +11,7 @@ inst_reqs = [
     "rio-cogeo",
     "rio-tiler~=2.0b2",
     "rio-color",
-    "fastapi",
+    "fastapi~=0.60.1",
     "uvicorn",
     "jinja2",
 ]

@@ -75,7 +75,7 @@ class viz(object):
         self.token = token
 
         @self.app.get(
-            "/tiles/{z}/{x}/{y}\\.pbf",
+            "/tiles/{z}/{x}/{y}.pbf",
             responses={
                 200: {
                     "content": {"application/x-protobuf": {}},
@@ -117,7 +117,7 @@ class viz(object):
             description="Read COG and return a tile",
         )
         @self.app.get(
-            r"/tiles/{z}/{x}/{y}\.{ext}",
+            r"/tiles/{z}/{x}/{y}.{ext}",
             responses={
                 200: {
                     "content": {"image/png": {}, "image/jpg": {}, "image/webp": {}},
@@ -177,16 +177,7 @@ class viz(object):
             "/tilejson.json",
             response_model=TileJSON,
             responses={200: {"description": "Return a tilejson"}},
-            response_model_include={
-                "tilejson",
-                "scheme",
-                "version",
-                "minzoom",
-                "maxzoom",
-                "bounds",
-                "center",
-                "tiles",
-            },  # https://github.com/tiangolo/fastapi/issues/528#issuecomment-589659378
+            response_model_exclude_none=True,
         )
         def _tilejson(
             request: Request,
