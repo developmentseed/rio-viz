@@ -1,24 +1,25 @@
 """rio_viz.cli."""
 
+import importlib
 import os
 import tempfile
-from contextlib import contextmanager, ExitStack
-
-import numpy
+import warnings
+from contextlib import ExitStack, contextmanager
 
 import click
-from rio_viz import app, raster
-
-from rio_cogeo.cogeo import cog_validate, cog_translate
+import numpy
+from rasterio.rio import options
+from rio_cogeo.cogeo import cog_translate, cog_validate
 from rio_cogeo.profiles import cog_profiles
+
+from rio_tiler.io import BaseReader, COGReader
+from rio_viz import app, raster
 
 
 @contextmanager
-def TemporaryRasterFile(dst_path, suffix=".tif"):
+def TemporaryRasterFile(suffix=".tif"):
     """Create temporary file."""
-    fileobj = tempfile.NamedTemporaryFile(
-        dir=os.path.dirname(dst_path), suffix=suffix, delete=False
-    )
+    fileobj = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     fileobj.close()
     try:
         yield fileobj
@@ -68,7 +69,7 @@ class NodataParamType(click.ParamType):
 
 
 @click.command()
-@click.argument("src_paths", type=str, nargs=-1, required=True)
+@click.argument("src_path", type=str, nargs=1, required=True)
 @click.option(
     "--nodata",
     type=NodataParamType(),
@@ -102,9 +103,20 @@ class NodataParamType(click.ParamType):
     help="Pass Mapbox token",
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
-@click.option("--simple", is_flag=True, default=False, help="Launch simple viewer")
+@click.option("--reader", type=str, help="Reader")
+@click.option(
+    "--layers", type=str, help="limit to specific layers (indexes, bands, assets)"
+)
+@click.option(
+    "--config",
+    "config",
+    metavar="NAME=VALUE",
+    multiple=True,
+    callback=options._cb_key_val,
+    help="GDAL configuration options.",
+)
 def viz(
-    src_paths,
+    src_path,
     nodata,
     minzoom,
     maxzoom,
@@ -113,40 +125,54 @@ def viz(
     host,
     mapbox_token,
     no_check,
-    simple,
+    reader,
+    layers,
+    config,
 ):
     """Rasterio Viz cli."""
-    # Check if cog
-    src_paths = list(src_paths)
-    with ExitStack() as ctx:
-        for ii, src_path in enumerate(src_paths):
-            if not no_check and not cog_validate(src_path):
-                # create tmp COG
-                click.echo("create temporaty COG")
-                tmp_path = ctx.enter_context(TemporaryRasterFile(src_path))
 
-                output_profile = cog_profiles.get("deflate")
-                output_profile.update(dict(blockxsize="256", blockysize="256"))
-                config = dict(
-                    GDAL_TIFF_INTERNAL_MASK=os.environ.get(
-                        "GDAL_TIFF_INTERNAL_MASK", True
-                    ),
-                    GDAL_TIFF_OVR_BLOCKSIZE="128",
-                )
-                cog_translate(src_path, tmp_path.name, output_profile, config=config)
-                src_paths[ii] = tmp_path.name
+    if reader:
+        module, classname = reader.rsplit(".", 1)
+        reader = getattr(importlib.import_module(module), classname)  # noqa
+        if not issubclass(reader, BaseReader):
+            warnings.warn("Reader should be a subclass of rio_tiler.io.BaseReader")
+
+    dataset_reader = reader or COGReader
+
+    # Check if cog
+    with ExitStack() as ctx:
+        if (
+            src_path.lower().endswith(".tif")
+            and not reader
+            and not no_check
+            and not cog_validate(src_path)[0]
+        ):
+            # create tmp COG
+            click.echo("create temporaty COG")
+            tmp_path = ctx.enter_context(TemporaryRasterFile())
+
+            output_profile = cog_profiles.get("deflate")
+            output_profile.update(dict(blockxsize="256", blockysize="256"))
+            config = dict(GDAL_TIFF_INTERNAL_MASK=True, GDAL_TIFF_OVR_BLOCKSIZE="128")
+            cog_translate(src_path, tmp_path.name, output_profile, config=config)
+            src_path = tmp_path.name
 
         src_dst = raster.RasterTiles(
-            src_paths, nodata=nodata, minzoom=minzoom, maxzoom=maxzoom
+            src_path,
+            reader=dataset_reader,
+            nodata=nodata,
+            minzoom=minzoom,
+            maxzoom=maxzoom,
+            layers=layers,
         )
         application = app.viz(
-            src_dst, token=mapbox_token, port=port, host=host, style=style
+            src_dst,
+            token=mapbox_token,
+            port=port,
+            host=host,
+            style=style,
+            config=config,
         )
-        url = (
-            application.get_simple_template_url()
-            if simple
-            else application.get_template_url()
-        )
-        click.echo(f"Viewer started at {url}", err=True)
-        click.launch(url)
+        click.echo(f"Viewer started at {application.template_url}", err=True)
+        click.launch(application.template_url)
         application.start()

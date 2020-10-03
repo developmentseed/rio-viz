@@ -1,11 +1,11 @@
 """tests rio_viz.raster."""
 
 import os
+
 import pytest
 
-from rio_viz.raster import RasterTiles
 from rio_tiler.errors import TileOutsideBounds
-
+from rio_viz.raster import RasterTiles
 
 cog_path = os.path.join(os.path.dirname(__file__), "fixtures", "cog.tif")
 

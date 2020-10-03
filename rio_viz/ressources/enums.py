@@ -16,3 +16,13 @@ class VectorType(str, Enum):
 
     pbf = "pbf"
     mvt = "mvt"
+
+
+class NodataTypes(str, Enum):
+    """rio-tiler Nodata types."""
+
+    Alpha = "Alpha"
+    Mask = "Mask"
+    Internal = "Internal"
+    Nodata = "Nodata"
+    Empty = "None"

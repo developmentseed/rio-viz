@@ -1,10 +1,9 @@
 """tests rio_viz.server."""
 
 import os
-import pytest
-
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 
 from rio_viz.scripts.cli import viz

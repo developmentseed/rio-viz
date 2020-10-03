@@ -1,31 +1,19 @@
 """rio_viz.raster: raster tiles object."""
 
-from typing import Dict, BinaryIO, Tuple, Union, Sequence, Optional
-
-import re
-from pathlib import Path
-from functools import partial
-from concurrent import futures
+from dataclasses import dataclass, field
+from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Type, Union
 
 import numpy
-
-from rio_tiler.io import COGReader
-from rio_tiler.io.cogeo import multi_metadata, multi_tile, multi_point
-
-from rio_tiler.utils import linear_rescale, _chunks
-
 from rio_color.operations import parse_operations
 from rio_color.utils import scale_dtype, to_math_type
 
-from starlette.concurrency import run_in_threadpool
+from rio_tiler.io import BaseReader, COGReader
+from rio_tiler.utils import _chunks, linear_rescale
 
-
-def _get_info(src_path: str) -> Dict:
-    with COGReader(src_path) as cog:
-        info = cog.info.copy()
-        info["dtype"] = cog.dataset.meta["dtype"]
-        info["band_descriptions"] = [band for _, band in info["band_descriptions"]]
-    return info
+try:
+    from rio_tiler_mvt import mvt
+except ModuleNotFoundError:
+    mvt = None
 
 
 def postprocess_tile(
@@ -61,43 +49,55 @@ def postprocess_tile(
     return tile
 
 
-class RasterTiles(object):
+@dataclass
+class RasterTiles:
     """Raster tiles object."""
 
-    def __init__(
-        self,
-        src_path: Sequence[str],
-        nodata: Union[str, int, float] = None,
-        minzoom: Optional[int] = None,
-        maxzoom: Optional[int] = None,
-    ):
-        """Initialize RasterTiles object."""
-        if isinstance(src_path, str):
-            src_path = (src_path,)
+    src_path: str
+    reader: Type[BaseReader] = field(default=COGReader)
+    nodata: Optional[Union[str, int, float]] = None
+    minzoom: Optional[int] = None
+    maxzoom: Optional[int] = None
 
-        self.path = src_path
-        self.nodata = nodata
+    layers: Optional[str] = field(default=None)
+    assets: Optional[Tuple[str]] = field(init=False)
+    bands: Optional[Tuple[str]] = field(init=False)
 
-        with futures.ThreadPoolExecutor() as executor:
-            responses = list(executor.map(_get_info, self.path))
+    bounds: Tuple[float, float, float, float] = field(init=False)
+    center: Tuple[float, float, int] = field(init=False)
+    colormap: Dict = field(init=False)
+    band_descriptions: List = field(init=False)
+    data_type: str = field(init=False)
 
-        self.bounds = responses[0]["bounds"]
-        self.center = responses[0]["center"]
-        self.minzoom = minzoom if minzoom is not None else responses[0]["minzoom"]
-        self.maxzoom = maxzoom if maxzoom is not None else responses[0]["maxzoom"]
-        self.data_type = responses[0]["dtype"]
-        self.colormap = responses[0].get("colormap")
+    def __post_init__(self):
+        """Post Init."""
+        with self.reader(self.src_path) as src_dst:
+            self.bounds = src_dst.bounds
+            self.center = src_dst.center
 
-        if len(self.path) != 1:
-            self.band_descriptions = [
-                Path(p).stem
-                if re.match(r"^band[0-9]+$", responses[idx]["band_descriptions"][0])
-                else responses[idx]["band_descriptions"][0]
-                for idx, p in enumerate(self.path)
-            ]
-        else:
-            self.band_descriptions = responses[0]["band_descriptions"]
+            self.minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
+            self.maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
+            self.colormap = getattr(src_dst, "colormap", None)
 
+            params = {}
+
+            self.assets = getattr(src_dst, "assets", None)
+            if self.assets:
+                params["assets"] = (
+                    self.layers.split(",") if self.layers else self.assets
+                )
+
+            self.bands = getattr(src_dst, "bands", None)
+            if self.bands:
+                params["bands"] = self.layers.split(",") if self.layers else self.bands
+
+            metadata = src_dst.info(**params)
+
+            # TODO: For STAC the metadata format will be different than for other Reader
+            self.band_descriptions = metadata["band_descriptions"]
+            self.data_type = metadata["dtype"]
+
+    @property
     def info(self) -> Dict:
         """Return general info about the images."""
         return dict(
@@ -111,110 +111,110 @@ class RasterTiles(object):
             dtype=self.data_type,
         )
 
-    def read_tile(
+    def tile(
         self,
         z: int,
         x: int,
         y: int,
+        indexes: Optional[str] = None,
         tilesize: int = 256,
-        indexes: Sequence[int] = None,
-        resampling_method: str = "bilinear",
+        **kwargs: Any,
     ) -> Tuple[numpy.ndarray, numpy.ndarray]:
         """Read raster tile data and mask."""
-        if len(self.path) != 1 and indexes:
-            path: Sequence[str] = [self.path[ii - 1] for ii in indexes]
-            indexes = None
+        if indexes:
+            bidx = tuple(int(s) for s in indexes.split(","))
+            if self.assets:
+                kwargs["assets"] = [self.assets[b - 1] for b in bidx]
+            elif self.bands:
+                kwargs["bands"] = [self.bands[b - 1] for b in bidx]
+            else:
+                kwargs["indexes"] = bidx
         else:
-            path = self.path
+            if self.assets:
+                kwargs["assets"] = (
+                    self.layers.split(",") if self.layers else self.assets
+                )
 
-        return multi_tile(
-            path,
-            x,
-            y,
-            z,
-            tilesize=tilesize,
-            indexes=indexes,
-            nodata=self.nodata,
-            resampling_method=resampling_method,
-        )
+            if self.bands:
+                kwargs["bands"] = self.layers.split(",") if self.layers else self.bands
 
-    async def read_tile_mvt(
+        with self.reader(self.src_path) as src_dst:
+            if self.nodata is not None:
+                kwargs["nodata"] = self.nodata
+            return src_dst.tile(x, y, z, tilesize=tilesize, **kwargs)
+
+    def mvt_tile(
         self,
         z: int,
         x: int,
         y: int,
+        indexes: Optional[str] = None,
         tilesize: int = 128,
-        resampling_method: str = "bilinear",
         feature_type: str = "point",
+        **kwargs: Any,
     ) -> BinaryIO:
         """Read raster tile data and encode to MVT."""
-        from rio_tiler_mvt import mvt
+        tile, mask = self.tile(z, x, y, indexes, tilesize=tilesize, **kwargs)
+        bands = [b for (_, b) in self.band_descriptions]
+        return mvt.encoder(tile, mask, bands, feature_type=feature_type)  # type: ignore
 
-        mvt_encoder = partial(run_in_threadpool, mvt.encoder)
-
-        tile, mask = self.read_tile(
-            z, x, y, tilesize=tilesize, resampling_method=resampling_method
-        )
-        return await mvt_encoder(
-            tile, mask, self.band_descriptions, feature_type=feature_type
-        )
-
-    def point(self, coordinates: Tuple[float, float]) -> dict:
+    def point(
+        self, lon: float, lat: float, indexes: Optional[str] = None, **kwargs: Any,
+    ) -> dict:
         """Read point value."""
-        results = multi_point(self.path, *coordinates)
-        if len(self.path) != 1:
-            results = [r[0] for r in results]
+        if indexes:
+            bidx = tuple(int(s) for s in indexes.split(","))
+            if self.assets:
+                kwargs["assets"] = [self.assets[b - 1] for b in bidx]
+            elif self.bands:
+                kwargs["bands"] = [self.bands[b - 1] for b in bidx]
+            else:
+                kwargs["indexes"] = bidx
         else:
-            results = results[0]
+            if self.assets:
+                kwargs["assets"] = (
+                    self.layers.split(",") if self.layers else self.assets
+                )
+
+            if self.bands:
+                kwargs["bands"] = self.layers.split(",") if self.layers else self.bands
+
+        with self.reader(self.src_path) as src_dst:
+            if self.nodata is not None:
+                kwargs["nodata"] = self.nodata
+            results = src_dst.point(lon, lat, **kwargs)
 
         return {
-            "coordinates": coordinates,
-            "value": {b: r for b, r in zip(self.band_descriptions, results)},
+            "coordinates": [lon, lat],
+            "value": {b[1]: r for b, r in zip(self.band_descriptions, results)},
         }
 
     def metadata(
-        self, pmin: float = 2.0, pmax: float = 98.0, indexes: Sequence[int] = None,
+        self,
+        pmin: float = 2.0,
+        pmax: float = 98.0,
+        indexes: Optional[str] = None,
+        **kwargs: Any,
     ) -> dict:
         """Get Raster metadata."""
         if indexes:
-            band_descriptions = [(ix, self.band_descriptions[ix - 1]) for ix in indexes]
+            bidx = tuple(int(s) for s in indexes.split(","))
+            if self.assets:
+                kwargs["assets"] = [self.assets[b - 1] for b in bidx]
+            elif self.bands:
+                kwargs["bands"] = [self.bands[b - 1] for b in bidx]
+            else:
+                kwargs["indexes"] = bidx
         else:
-            band_descriptions = [
-                (ix + 1, d) for ix, d in enumerate(self.band_descriptions)
-            ]
+            if self.assets:
+                kwargs["assets"] = (
+                    self.layers.split(",") if self.layers else self.assets
+                )
 
-        if len(self.path) != 1 and indexes:
-            path: Sequence[str] = [self.path[ii - 1] for ii in indexes]
-            indexes = None
-        else:
-            path = self.path
+            if self.bands:
+                kwargs["bands"] = self.layers.split(",") if self.layers else self.bands
 
-        hist_options = dict()
-        if self.colormap:
-            hist_options.update(
-                dict(bins=[k for k, v in self.colormap.items() if v != (0, 0, 0, 255)])
-            )
-
-        results = multi_metadata(
-            path,
-            pmin,
-            pmax,
-            indexes=indexes,
-            nodata=self.nodata,
-            hist_options=hist_options,
-        )
-
-        info = {"bounds": self.bounds, "minzoom": self.minzoom, "maxzoom": self.maxzoom}
-        info["band_descriptions"] = band_descriptions
-
-        if len(self.path) != 1:
-            info["statistics"] = {
-                band_descriptions[ix][0]: r["statistics"][1]
-                for ix, r in enumerate(results)
-            }
-        else:
-            info["statistics"] = results[0]["statistics"]
-
-        info["dtype"] = self.data_type
-
-        return info
+        with self.reader(self.src_path) as src_dst:
+            if self.nodata is not None:
+                kwargs["nodata"] = self.nodata
+            return src_dst.metadata(pmin, pmax, **kwargs)
