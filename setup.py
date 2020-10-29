@@ -1,6 +1,6 @@
 """setup: rio-viz."""
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 with open("README.md") as f:
     long_description = f.read()
@@ -9,11 +9,12 @@ with open("README.md") as f:
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler~=2.0b2",
+    "rio-tiler>=2.0.0b19",
     "rio-color",
-    "fastapi~=0.60.1",
+    "fastapi~=0.61",
     "uvicorn",
     "jinja2",
+    "braceexpand",
 ]
 
 extra_reqs = {
@@ -35,6 +36,7 @@ setup(
         "License :: OSI Approved :: BSD License",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Topic :: Scientific/Engineering :: GIS",
     ],
     keywords="COG COGEO Rasterio GIS MVT",

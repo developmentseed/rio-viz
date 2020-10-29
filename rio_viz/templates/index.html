@@ -7,7 +7,7 @@
 
         <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.6.1/mapbox-gl.js'></script>
         <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v1.6.1/mapbox-gl.css' rel='stylesheet' />
-        
+
         <link href='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.min.css' rel='stylesheet'>
         <script src='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js'></script>
         <script src="https://d3js.org/d3.v4.js"></script>
@@ -399,8 +399,9 @@
       switch (vizType) {
         case 'raster':
           const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-          indexes = active_layer.getAttribute('data-indexes')
+          indexes = active_layer.getAttribute('band')
           params.indexes = indexes
+
           if (document.getElementById('histcut-selector').querySelector("input[name='toggle-histo']:checked").value !== 'none') {
             const minV = scope.config[indexes].min
             const maxV = scope.config[indexes].max
@@ -438,9 +439,9 @@
     }
 
     const set3bViz = () => {
-      const r = document.getElementById('r-selector').value
-      const g = document.getElementById('g-selector').value
-      const b = document.getElementById('b-selector').value
+      const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
+      const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
+      const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
 
       params = {
         resampling_method:  document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
@@ -458,7 +459,6 @@
       }
       const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
       let url = `${tilejson_endpoint}?${url_params}`
-
 
       map.addSource('raster', { type: 'raster', url: url, tileSize: 512})
       map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
@@ -490,9 +490,12 @@
       if (map.getLayer('mvt')) map.removeLayer('mvt')
 
       const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const indexes = active_layer.getAttribute('data-indexes')
-      const sMin = scope.config[indexes].min
+      const indexes = active_layer.getAttribute('band')
+
+      let sMin = scope.config[indexes].min
       const sMax = scope.config[indexes].max
+      if (sMin === sMax) sMin = sMin - 0.00001
+
       addHisto1Band()
 
       const propName = active_layer.value
@@ -566,9 +569,9 @@
     }
 
     const addHisto3Bands = () => {
-      const r = document.getElementById('r-selector').value
-      const g = document.getElementById('g-selector').value
-      const b = document.getElementById('b-selector').value
+      const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("name")
+      const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("name")
+      const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("name")
 
       const rStats = scope.metadata.statistics[r]
       const gStats = scope.metadata.statistics[g]
@@ -652,8 +655,7 @@
 
     const addHisto1Band = () => {
       const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const indexes = active_layer.getAttribute('data-indexes')
-      const stats = scope.metadata.statistics[indexes]
+      const stats = scope.metadata.statistics[active_layer.getAttribute('name')]
 
       const counts = stats.histogram[0]
       const values = stats.histogram[1]
@@ -799,16 +801,20 @@
             pmax = 95.0
           break
       }
-      fetch(`${metadata_endpoint}?pmin=${pmin}&pmax=${pmax}`)
+      fetch(`${metadata_endpoint}?pmin=${pmin}&pmax=${pmax}&max_size=256`)
           .then(res => {
             if (res.ok) return res.json()
             throw new Error('Network response was not ok.')
           })
           .then(data => {
             scope.metadata.statistics = data.statistics
-            Object.entries(scope.metadata.statistics).forEach(entry => {
-              scope.config[entry[0]] = { "min": entry[1].pc[0], "max": entry[1].pc[1] }
-            })
+            const band_names = Object.keys(scope.metadata.statistics)
+            scope.config = {}
+            for (var i = 0; i < band_names.length; i++) {
+              let stat_idx = band_names[i]
+              scope.config[i + 1] = { "min": scope.metadata.statistics[stat_idx].min, "max": scope.metadata.statistics[stat_idx].max }
+            }
+
             const rasterType = document.getElementById('toolbar').querySelector(".active").id
             if (rasterType === "1b") {
               updateViz()
@@ -945,7 +951,7 @@
         }
       })
 
-      fetch(`${metadata_endpoint}`)
+      fetch(`${metadata_endpoint}?max_size=256`)
         .then(res => {
           if (res.ok) return res.json()
           throw new Error('Network response was not ok.')
@@ -959,52 +965,54 @@
             document.getElementById('histcut-selector').querySelector("input[value='minmax']").checked = true
           }
 
-          scope.config = {}
-          Object.entries(scope.metadata.statistics).forEach(entry => {
-            scope.config[entry[0]] = { "min": entry[1].min, "max": entry[1].max }
-          })
+          const band_names = Object.keys(scope.metadata.statistics)
+          const nbands = band_names.length
 
+          scope.config = {}
+          for (var i = 0; i < nbands; i++) {
+            let stat_idx = band_names[i]
+            scope.config[i + 1] = { "min": scope.metadata.statistics[stat_idx].min, "max": scope.metadata.statistics[stat_idx].max }
+          }
+
+          const band_descr = scope.metadata.band_descriptions
           //1 band
           const layerList = document.getElementById('layer-selector')
-          for (var i = 0; i < scope.metadata.band_descriptions.length; i++) {
+          for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
-            l.value = scope.metadata.band_descriptions[i][1]
-            l.setAttribute('data-indexes', scope.metadata.band_descriptions[i][0].toString())
-            l.text = scope.metadata.band_descriptions[i][1]
+            l.setAttribute('band', band_descr[i][0])
+            l.setAttribute('name', band_names[i])
+            l.text = band_descr[i][1]
             layerList.appendChild(l)
           }
 
           //RGB
-          const nbands = scope.metadata.band_descriptions.length
           const rList = document.getElementById('r-selector')
-          for (var i = 0; i < scope.metadata.band_descriptions.length; i++) {
+          for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
-            let val = scope.metadata.band_descriptions[i][0]
-            l.value = val
-            l.setAttribute('data-indexes', val.toString())
-            l.text = scope.metadata.band_descriptions[i][1]
+            l.setAttribute('band', band_descr[i][0])
+            l.setAttribute('name', band_names[i])
+            l.text = band_descr[i][1]
             if (i === 0) l.selected="selected"
             rList.appendChild(l)
           }
 
           const gList = document.getElementById('g-selector')
-          for (var i = 0; i < scope.metadata.band_descriptions.length; i++) {
+          for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
-            let val = scope.metadata.band_descriptions[i][0]
-            l.value = val
-            l.setAttribute('data-indexes', val.toString())
-            l.text = scope.metadata.band_descriptions[i][1]
+            l.setAttribute('band', band_descr[i][0])
+            l.setAttribute('name', band_names[i])
+            l.text = band_descr[i][1]
             if (i === 1) l.selected="selected"
             gList.appendChild(l)
           }
+
           const bList = document.getElementById('b-selector')
-          for (var i = 0; i < scope.metadata.band_descriptions.length; i++) {
+          for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
-            let val = scope.metadata.band_descriptions[i][0]
-            l.value = val
-            l.setAttribute('data-indexes', val.toString())
-            l.text = scope.metadata.band_descriptions[i][1]
-            if (nbands > 2 && i === 2) {
+            l.setAttribute('band', band_descr[i][0])
+            l.setAttribute('name', band_names[i])
+            l.text = band_descr[i][1]
+            if (band_names.length > 2 && i === 2) {
               l.selected="selected"
             } else {
               l.selected="selected"
@@ -1030,7 +1038,6 @@
             document.getElementById('1b').classList.add('active')
             document.getElementById('1b-section').classList.toggle('active')
           }
-
           switchViz()
         })
         .catch(err => {

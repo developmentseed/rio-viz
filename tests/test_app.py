@@ -1,30 +1,30 @@
 """tests rio_viz.server."""
 
 import os
-import pytest
 
+import pytest
 from starlette.testclient import TestClient
 
-from rio_viz.raster import RasterTiles
-from rio_viz.app import viz
-
 from rio_tiler.errors import TileOutsideBounds
-
+from rio_tiler.io import COGReader
+from rio_viz.app import viz
+from rio_viz.compat import AsyncReader
+from rio_viz.io.reader import MultiFilesReader
 
 cog_path = os.path.join(os.path.dirname(__file__), "fixtures", "cog.tif")
+cogb1b2b3_path = os.path.join(os.path.dirname(__file__), "fixtures", "cogb{1,2,3}.tif")
 
 
 def test_viz():
     """Should work as expected (create TileServer object)."""
-    r = RasterTiles(cog_path)
-    app = viz(r)
-    assert app.raster == r
+    src_path = cog_path
+    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": COGReader})
+
+    app = viz(src_path, reader=dataset_reader)
+
     assert app.port == 8080
-    assert app.get_bounds() == r.bounds
-    assert app.get_center() == r.center
-    assert app.get_endpoint_url() == "http://127.0.0.1:8080"
-    assert app.get_template_url() == "http://127.0.0.1:8080/index.html"
-    assert app.get_simple_template_url() == "http://127.0.0.1:8080/index_simple.html"
+    assert app.endpoint == "http://127.0.0.1:8080"
+    assert app.template_url == "http://127.0.0.1:8080/index.html"
     client = TestClient(app.app)
 
     response = client.get("/")
@@ -33,14 +33,17 @@ def test_viz():
     response = client.get("/index.html")
     assert response.status_code == 200
 
-    response = client.get("/index_simple.html")
-    assert response.status_code == 200
-
     response = client.get("/tiles/7/64/43.png?rescale=1,10")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43.png?rescale=1,10&indexes=1")
+    response = client.get(
+        "/tiles/7/64/43.png?rescale=1,10&indexes=1&color_formula=Gamma R 3"
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+    response = client.get("/tiles/7/64/43.png?rescale=1,10&indexes=1,1,1")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
@@ -65,6 +68,10 @@ def test_viz():
     response = client.get("/tiles/7/64/43.pbf?feature_type=polygon")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
+
+    response = client.get("/info")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
 
     response = client.get("/metadata")
     assert response.status_code == 200
@@ -95,15 +102,36 @@ def test_viz():
     response = client.get("/point?coordinates=-2,48")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    assert response.json() == {"coordinates": [-2.0, 48.0], "value": {"band1": 110}}
+    assert response.json() == {"coordinates": [-2.0, 48.0], "value": [110]}
 
 
 def test_viz_custom():
     """Should work as expected (create TileServer object)."""
-    r = RasterTiles(cog_path)
-    app = viz(r, host="0.0.0.0", port=5050)
-    assert app.raster == r
+
+    src_path = cog_path
+    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": COGReader})
+
+    app = viz(src_path, reader=dataset_reader, host="0.0.0.0", port=5050)
     assert app.port == 5050
-    assert app.get_bounds() == r.bounds
-    assert app.get_center() == r.center
-    assert app.get_endpoint_url() == "http://0.0.0.0:5050"
+    assert app.endpoint == "http://0.0.0.0:5050"
+
+
+def test_viz_multi():
+    """Should work as expected (create TileServer object)."""
+
+    src_path = cogb1b2b3_path
+    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": MultiFilesReader})
+
+    app = viz(src_path, reader=dataset_reader)
+    assert app.port == 8080
+    assert app.endpoint == "http://127.0.0.1:8080"
+    client = TestClient(app.app)
+
+    response = client.get("/info")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.json()["band_descriptions"] == [
+        [1, "band1"],
+        [2, "band2"],
+        [3, "band3"],
+    ]

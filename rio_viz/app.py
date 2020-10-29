@@ -1,64 +1,120 @@
 """rio_viz app."""
 
-from typing import Any, Optional, Tuple, Union
-
-import re
+import asyncio
+import pathlib
 import urllib.parse
+from enum import Enum
 from functools import partial
+from typing import Any, Dict, Optional, Type, Union
 
+import attr
+import numpy
+import rasterio
+import uvicorn
+from fastapi import FastAPI, Query
+from rasterio.enums import Resampling
+from rio_color.operations import parse_operations
+from rio_color.utils import scale_dtype, to_math_type
 from starlette.concurrency import run_in_threadpool
-
-from rio_viz import version as rioviz_version
-
-from rio_viz.raster import postprocess_tile
-from rio_viz.models.mapbox import TileJSON
-from rio_viz.ressources.enums import ImageType, VectorType
-from rio_viz.ressources.common import drivers, mimetype
-from rio_viz.ressources.responses import TileResponse
-from rio_viz.templates.template import index_template_factory, simple_template_factory
-
-from rio_tiler.utils import render
-from rio_tiler.colormap import cmap
-from rio_tiler.profiles import img_profiles
-
-from starlette.requests import Request
-from starlette.responses import Response, HTMLResponse
-from starlette.templating import _TemplateResponse
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+from starlette.templating import Jinja2Templates
 
-from fastapi import Depends, FastAPI, Query
-import uvicorn
+from rio_tiler.colormap import cmap
+from rio_tiler.io import AsyncBaseReader
+from rio_tiler.profiles import img_profiles
+from rio_tiler.utils import _chunks, linear_rescale, render
+
+from .models.mapbox import TileJSON
+from .models.responses import MetadataModel
+from .ressources.common import drivers, mimetype
+from .ressources.enums import ImageType, VectorType
+from .ressources.responses import TileResponse, XMLResponse
 
 try:
-    import rio_tiler_mvt  # noqa
+    from rio_tiler_mvt.mvt import encoder as mvt_encoder  # noqa
 
     has_mvt = True
 except ModuleNotFoundError:
     has_mvt = False
 
 
+template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
+templates = Jinja2Templates(directory=template_dir)
+
+
+def postprocess_tile(
+    tile: numpy.ndarray,
+    mask: numpy.ndarray,
+    rescale: str = None,
+    color_formula: str = None,
+) -> numpy.ndarray:
+    """Post-process tile data."""
+    if rescale:
+        rescale_arr = list(map(float, rescale.split(",")))
+        rescale_arr = list(_chunks(rescale_arr, 2))
+        if len(rescale_arr) != tile.shape[0]:
+            rescale_arr = ((rescale_arr[0]),) * tile.shape[0]
+
+        for bdx in range(tile.shape[0]):
+            tile[bdx] = numpy.where(
+                mask,
+                linear_rescale(
+                    tile[bdx], in_range=rescale_arr[bdx], out_range=[0, 255]
+                ),
+                0,
+            )
+        tile = tile.astype(numpy.uint8)
+
+    if color_formula:
+        # make sure one last time we don't have
+        # negative value before applying color formula
+        tile[tile < 0] = 0
+        for ops in parse_operations(color_formula):
+            tile = scale_dtype(ops(to_math_type(tile)), numpy.uint8)
+
+    return tile
+
+
 _postprocess_tile = partial(run_in_threadpool, postprocess_tile)
 _render = partial(run_in_threadpool, render)
+_mvt_encoder = partial(run_in_threadpool, mvt_encoder)
+
+ResamplingNames = Enum(  # type: ignore
+    "ResamplingNames", [(r.name, r.name) for r in Resampling]
+)
 
 
-class viz(object):
+@attr.s
+class viz:
     """Creates a very minimal slippy map tile server using fastAPI + Uvicorn."""
 
-    def __init__(
-        self,
-        raster,
-        token: str = None,
-        port: int = 8080,
-        host: str = "127.0.0.1",
-        style: str = "satellite",
-    ):
-        """Initialize app."""
-        self.app = FastAPI(
-            title="titiler",
-            description="A lightweight Cloud Optimized GeoTIFF tile server",
-            version=rioviz_version,
-        )
+    src_path: str = attr.ib()
+    reader: Type[AsyncBaseReader] = attr.ib()
+
+    app: FastAPI = attr.ib(default=attr.Factory(FastAPI))
+
+    token: Optional[str] = attr.ib(default=None)
+    port: int = attr.ib(default=8080)
+    host: str = attr.ib(default="127.0.0.1")
+    style: str = attr.ib(default="satellite")
+    config: Dict = attr.ib(default=dict)
+
+    minzoom: Optional[int] = attr.ib(default=None)
+    maxzoom: Optional[int] = attr.ib(default=None)
+
+    layers: Optional[str] = attr.ib(default=None)
+    nodata: Optional[Union[str, int, float]] = attr.ib(default=None)
+
+    def __attrs_post_init__(self):
+        """Update App."""
+        self.register_middleware()
+        self.register_routes()
+
+    def register_middleware(self):
+        """Register Middleware to the FastAPI app."""
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -68,49 +124,46 @@ class viz(object):
         )
         self.app.add_middleware(GZipMiddleware, minimum_size=0)
 
-        self.raster = raster
-        self.port = port
-        self.host = host
-        self.style = style
-        self.token = token
+    def _get_options(self, src_dst, indexes: Optional[str] = None):
+        """Create Reader options."""
+        kwargs: Dict[str, Any] = {}
 
-        @self.app.get(
-            "/tiles/{z}/{x}/{y}.pbf",
-            responses={
-                200: {
-                    "content": {"application/x-protobuf": {}},
-                    "description": "Return a Mapbox Vector Tile.",
-                }
-            },
-            description="Read COG and return a tile",
-        )
-        async def _mvt(
-            z: int,
-            x: int,
-            y: int,
-            tilesize: int = 128,
-            feature_type: str = Query(
-                None, title="Feature type", regex="^(point)|(polygon)$"
-            ),
-            resampling_method: str = Query("nearest", title="rasterio resampling"),
-        ):
-            """Handle /mvt requests."""
-            content = await self.raster.read_tile_mvt(
-                z,
-                x,
-                y,
-                tilesize=tilesize,
-                resampling_method=resampling_method,
-                feature_type=feature_type,
-            )
-            return TileResponse(content, media_type=mimetype["pbf"])
+        assets = getattr(src_dst, "assets", None)
+        bands = getattr(src_dst, "bands", None)
+
+        if indexes:
+            bidx = tuple(int(s) for s in indexes.split(","))
+            if assets:
+                kwargs["assets"] = [assets[b - 1] for b in bidx]
+            elif bands:
+                kwargs["bands"] = [bands[b - 1] for b in bidx]
+            else:
+                kwargs["indexes"] = bidx
+        else:
+            if assets:
+                kwargs["assets"] = self.layers.split(",") if self.layers else assets
+            if bands:
+                kwargs["bands"] = self.layers.split(",") if self.layers else bands
+
+        if self.nodata is not None:
+            kwargs["nodata"] = self.nodata
+
+        return kwargs
+
+    def register_routes(self):
+        """Register Middleware to the FastAPI app."""
 
         @self.app.get(
             r"/tiles/{z}/{x}/{y}",
             responses={
                 200: {
-                    "content": {"image/png": {}, "image/jpg": {}, "image/webp": {}},
-                    "description": "Return an image.",
+                    "content": {
+                        "image/png": {},
+                        "image/jpg": {},
+                        "image/webp": {},
+                        "application/x-protobuf": {},
+                    },
+                    "description": "Return a tile.",
                 }
             },
             response_class=TileResponse,
@@ -127,51 +180,117 @@ class viz(object):
             response_class=TileResponse,
             description="Read COG and return a tile",
         )
-        async def _tile(
+        async def tile(
             z: int,
             x: int,
             y: int,
             scale: int = Query(2, gt=0, lt=4),
-            ext: ImageType = None,
-            indexes: Any = Query(None, description="Coma (',') delimited band indexes"),
-            rescale: Any = Query(
+            ext: Union[ImageType, VectorType] = None,
+            indexes: Optional[str] = Query(
+                None, description="Coma (',') delimited band indexes"
+            ),
+            rescale: Optional[str] = Query(
                 None, description="Coma (',') delimited Min,Max bounds"
             ),
-            color_formula: str = Query(None, description="rio-color formula"),
-            color_map: str = Query(None, description="rio-tiler color map names"),
-            resampling_method: str = Query(
-                "bilinear", description="rasterio resampling"
+            color_formula: Optional[str] = Query(None, description="rio-color formula"),
+            color_map: Optional[str] = Query(
+                None, description="rio-tiler color map names"
+            ),
+            resampling_method: ResamplingNames = Query(
+                ResamplingNames.nearest, description="Resampling method."  # type: ignore
+            ),
+            feature_type: str = Query(
+                None,
+                title="Feature type (Only for Vector)",
+                regex="^(point)|(polygon)$",
             ),
         ):
             """Handle /tiles requests."""
-            if isinstance(indexes, str):
-                indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
+            if ext and ext in [VectorType.pbf, VectorType.mvt]:
+                scale = 1
 
             tilesize = scale * 256
-            tile, mask = self.raster.read_tile(
-                z,
-                x,
-                y,
-                tilesize=tilesize,
-                indexes=indexes,
-                resampling_method=resampling_method,
-            )
+            async with self.reader(self.src_path) as src_dst:
+                kwargs = self._get_options(src_dst, indexes)
+                tile, mask = await src_dst.tile(
+                    x,
+                    y,
+                    z,
+                    tilesize=tilesize,
+                    resampling_method=resampling_method.name,
+                    **kwargs,
+                )
 
-            tile = await _postprocess_tile(
-                tile, mask, rescale=rescale, color_formula=color_formula
-            )
+                bands = kwargs.get("bands", kwargs.get("assets", None))
 
-            if not ext:
-                ext = ImageType.jpg if mask.all() else ImageType.png
+            if ext and ext in [VectorType.pbf, VectorType.mvt]:
+                content = await _mvt_encoder(tile, mask, bands, feature_type=feature_type)  # type: ignore
+            else:
+                tile = await _postprocess_tile(
+                    tile, mask, rescale=rescale, color_formula=color_formula
+                )
+                if not ext:
+                    ext = ImageType.jpg if mask.all() else ImageType.png
 
-            driver = drivers[ext]
-            options = img_profiles.get(driver.lower(), {})
-            options["colormap"] = (
-                cmap.get(color_map) if color_map else self.raster.colormap
-            )
+                driver = drivers[ext]
+                options = img_profiles.get(driver.lower(), {})
+                options["colormap"] = (
+                    cmap.get(color_map)
+                    if color_map
+                    else getattr(src_dst, "colormap", None)
+                )
+                content = await _render(tile, mask, img_format=driver, **options)
 
-            content = await _render(tile, mask, img_format=driver, **options)
             return TileResponse(content, media_type=mimetype[ext.value])
+
+        @self.app.get(
+            "/metadata",
+            response_model=MetadataModel,
+            response_model_exclude={"minzoom", "maxzoom", "center"},
+            response_model_exclude_none=True,
+            responses={200: {"description": "Return the metadata of the COG."}},
+        )
+        async def metadata(
+            pmin: float = 2.0,
+            pmax: float = 98.0,
+            indexes: Optional[str] = Query(
+                None, title="Coma (',') delimited band indexes"
+            ),
+        ):
+            """Handle /metadata requests."""
+            async with self.reader(self.src_path) as src_dst:
+                kwargs = self._get_options(src_dst, indexes)
+                info, stats = await asyncio.gather(
+                    *[src_dst.info(**kwargs), src_dst.stats(pmin, pmax, **kwargs)]
+                )
+                info["statistics"] = stats
+                return info
+
+        @self.app.get(
+            "/point", responses={200: {"description": "Return a point value."}},
+        )
+        async def point(
+            coordinates: str = Query(
+                ..., title="Coma (',') delimited lon,lat coordinates"
+            ),
+        ):
+            """Handle /point requests."""
+            lon, lat = list(map(float, coordinates.split(",")))
+            async with self.reader(self.src_path) as src_dst:
+                kwargs = self._get_options(src_dst)
+                results = await src_dst.point(lon, lat, **kwargs)
+
+            return {"coordinates": [lon, lat], "value": results}
+
+        @self.app.get(
+            "/info",
+            responses={200: {"description": "Return the metadata of the COG."}},
+        )
+        async def info():
+            """Handle /info requests."""
+            async with self.reader(self.src_path) as src_dst:
+                kwargs = self._get_options(src_dst)
+                return await src_dst.info(**kwargs)
 
         @self.app.get(
             "/tilejson.json",
@@ -179,120 +298,173 @@ class viz(object):
             responses={200: {"description": "Return a tilejson"}},
             response_model_exclude_none=True,
         )
-        def _tilejson(
+        async def tilejson(
             request: Request,
-            response: Response,
             tile_format: Optional[Union[ImageType, VectorType]] = None,
+            indexes: Optional[str] = Query(  # noqa
+                None, description="Coma (',') delimited band indexes"
+            ),
+            rescale: Optional[str] = Query(  # noqa
+                None, description="Coma (',') delimited Min,Max bounds"
+            ),
+            color_formula: Optional[str] = Query(
+                None, description="rio-color formula"
+            ),  # noqa
+            color_map: Optional[str] = Query(  # noqa
+                None, description="rio-tiler color map names"
+            ),
+            resampling_method: ResamplingNames = Query(  # noqa
+                ResamplingNames.nearest, description="Resampling method."  # type: ignore
+            ),
+            feature_type: str = Query(  # noqa
+                None, title="Feature type", regex="^(point)|(polygon)$"
+            ),
         ):
             """Handle /tilejson.json requests."""
-            scheme = request.url.scheme
-            host = request.headers["host"]
+            kwargs: Dict[str, Any] = {"z": "{z}", "x": "{x}", "y": "{y}"}
+            if tile_format:
+                kwargs["ext"] = tile_format.value
+
+            tile_url = request.url_for("tile", **kwargs)
 
             kwargs = dict(request.query_params)
             kwargs.pop("tile_format", None)
-
-            tile_url = f"{scheme}://{host}/tiles/{{z}}/{{x}}/{{y}}"
-            if tile_format:
-                tile_url += f".{tile_format}"
-
             qs = urllib.parse.urlencode(list(kwargs.items()))
             if qs:
                 tile_url += f"?{qs}"
 
+            async with self.reader(self.src_path) as src_dst:
+                bounds = src_dst.bounds
+                center = src_dst.center
+                minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
+                maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
+
             return dict(
-                bounds=self.raster.bounds,
-                center=self.raster.center,
-                minzoom=self.raster.minzoom,
-                maxzoom=self.raster.maxzoom,
+                bounds=bounds,
+                center=center,
+                minzoom=minzoom,
+                maxzoom=maxzoom,
                 name="rio-viz",
                 tilejson="2.1.0",
                 tiles=[tile_url],
             )
 
         @self.app.get(
-            "/metadata",
-            responses={200: {"description": "Return the metadata of the COG."}},
-        )
-        async def _metadata(
-            response: Response,
-            pmin: float = 2.0,
-            pmax: float = 98.0,
-            indexes: Any = Query(None, title="Coma (',') delimited band indexes"),
-        ):
-            """Handle /metadata requests."""
-            if isinstance(indexes, str):
-                indexes = tuple(int(s) for s in re.findall(r"\d+", indexes))
-
-            return self.raster.metadata(pmin, pmax, indexes=indexes)
-
-        @self.app.get(
-            "/info",
-            responses={200: {"description": "Return the metadata of the COG."}},
-        )
-        def _info(response: Response,):
-            """Handle /info requests."""
-            return self.raster.info()
-
-        @self.app.get(
-            "/point", responses={200: {"description": "Return a point value."}}
-        )
-        def _point(response: Response, coordinates: Any):
-            """Handle /point requests."""
-            if isinstance(coordinates, str):
-                coordinates = list(map(float, coordinates.split(",")))
-
-            return self.raster.point(coordinates)
-
-        @self.app.get(
             "/index.html",
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
         )
-        def _viewer(template: _TemplateResponse = Depends(index_template_factory)):
+        async def viewer(request: Request):
             """Handle /index.html."""
-            template.context.update(
-                {
+            return templates.TemplateResponse(
+                name="index.html",
+                context={
+                    "request": request,
+                    "tilejson_endpoint": request.url_for("tilejson"),
+                    "metadata_endpoint": request.url_for("metadata"),
+                    "point_endpoint": request.url_for("point"),
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
                     "allow_3d": has_mvt,
-                }
+                },
+                media_type="text/html",
             )
-            return template
 
-        @self.app.get(
-            "/index_simple.html",
-            responses={200: {"description": "Simple COG viewer."}},
-            response_class=HTMLResponse,
-        )
-        def _simple_viewer(
-            template: _TemplateResponse = Depends(simple_template_factory),
+        @self.app.get("/WMTSCapabilities.xml", response_class=XMLResponse)
+        async def wmts(
+            request: Request,
+            tile_format: ImageType = Query(
+                ImageType.png, description="Output image type. Default is png."
+            ),
+            indexes: Optional[str] = Query(  # noqa
+                None, description="Coma (',') delimited band indexes"
+            ),
+            rescale: Optional[str] = Query(  # noqa
+                None, description="Coma (',') delimited Min,Max bounds"
+            ),
+            color_formula: Optional[str] = Query(
+                None, description="rio-color formula"
+            ),  # noqa
+            color_map: Optional[str] = Query(  # noqa
+                None, description="rio-tiler color map names"
+            ),
+            resampling_method: ResamplingNames = Query(  # noqa
+                ResamplingNames.nearest, description="Resampling method."  # type: ignore
+            ),
+            feature_type: str = Query(  # noqa
+                None, title="Feature type", regex="^(point)|(polygon)$"
+            ),
         ):
-            """Handle /index_simple."""
-            template.context.update(
-                {"mapbox_access_token": self.token, "mapbox_style": self.style}
-            )
-            return template
+            """
+            This is a hidden gem.
 
-    def get_endpoint_url(self) -> str:
+            rio-viz is meant to be use to visualize your dataset in the browser but
+            using this endpoint, you can also load it in you GIS software.
+
+            """
+            kwargs = {
+                "z": "{TileMatrix}",
+                "x": "{TileCol}",
+                "y": "{TileRow}",
+                "ext": tile_format.value,
+            }
+            tiles_endpoint = request.url_for("tile", **kwargs)
+
+            q = dict(request.query_params)
+            q.pop("tile_format", None)
+            q.pop("minzoom", None)
+            q.pop("maxzoom", None)
+            q.pop("SERVICE", None)
+            q.pop("REQUEST", None)
+            qs = urllib.parse.urlencode(list(q.items()))
+            if qs:
+                tiles_endpoint += f"?{qs}"
+
+            async with self.reader(self.src_path) as src_dst:
+                bounds = src_dst.bounds
+                minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
+                maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
+
+            tileMatrix = []
+            for zoom in range(minzoom, maxzoom + 1):
+                tm = f"""<TileMatrix>
+                    <ows:Identifier>{zoom}</ows:Identifier>
+                    <ScaleDenominator>{559082264.02872 / 2 ** zoom / 1}</ScaleDenominator>
+                    <TopLeftCorner>-20037508.34278925 20037508.34278925</TopLeftCorner>
+                    <TileWidth>256</TileWidth>
+                    <TileHeight>256</TileHeight>
+                    <MatrixWidth>{2 ** zoom}</MatrixWidth>
+                    <MatrixHeight>{2 ** zoom}</MatrixHeight>
+                </TileMatrix>"""
+                tileMatrix.append(tm)
+
+            media_type = mimetype[tile_format.value]
+
+            return templates.TemplateResponse(
+                "wmts.xml",
+                {
+                    "request": request,
+                    "tiles_endpoint": tiles_endpoint,
+                    "bounds": bounds,
+                    "tileMatrix": tileMatrix,
+                    "title": "Cloud Optimized GeoTIFF",
+                    "layer_name": "cogeo",
+                    "media_type": media_type,
+                },
+                media_type="application/xml",
+            )
+
+    @property
+    def endpoint(self) -> str:
         """Get endpoint url."""
         return f"http://{self.host}:{self.port}"
 
-    def get_template_url(self) -> str:
+    @property
+    def template_url(self) -> str:
         """Get simple app template url."""
         return f"http://{self.host}:{self.port}/index.html"
 
-    def get_simple_template_url(self) -> str:
-        """Get simple app template url."""
-        return f"http://{self.host}:{self.port}/index_simple.html"
-
-    def get_bounds(self) -> str:
-        """Get RasterTiles bounds."""
-        return self.raster.bounds
-
-    def get_center(self) -> Tuple:
-        """Get RasterTiles center."""
-        return self.raster.center
-
     def start(self):
         """Start tile server."""
-        uvicorn.run(app=self.app, host=self.host, port=self.port, log_level="info")
+        with rasterio.Env(**self.config):
+            uvicorn.run(app=self.app, host=self.host, port=self.port, log_level="info")

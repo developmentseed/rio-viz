@@ -1,10 +1,9 @@
 """tests rio_viz.server."""
 
 import os
-import pytest
-
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 
 from rio_viz.scripts.cli import viz
@@ -31,24 +30,6 @@ def test_viz_valid(launch, app):
     runner = CliRunner()
     result = runner.invoke(viz, [cog_path])
     app.assert_called_once()
-    assert not result.exception
-    assert result.exit_code == 0
-
-
-@patch("rio_viz.app.viz")
-@patch("click.launch")
-def test_viz_validMultiple(launch, app):
-    """Should work as expected with multiple path."""
-    app.return_value.get_template_url.return_value = "http://127.0.0.1:8080/index.html"
-    app.return_value.start.return_value = True
-
-    launch.return_value = True
-
-    runner = CliRunner()
-    result = runner.invoke(viz, [cog_path, cog_path, cog_path])
-    app.assert_called_once()
-    raster = app.call_args[0][0]
-    assert len(raster.path) == 3
     assert not result.exception
     assert result.exit_code == 0
 
@@ -124,8 +105,7 @@ def test_viz_invalidCog(launch, app):
 
     runner = CliRunner()
     result = runner.invoke(viz, [noncog_path])
-    raster = app.call_args[0][0]
-    assert raster.path[0] is not noncog_path
+    assert app.call_args[0] is not noncog_path
     app.assert_called_once()
     assert not result.exception
     assert result.exit_code == 0

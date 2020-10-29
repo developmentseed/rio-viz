@@ -1,7 +1,7 @@
 """Common response models."""
 
-from starlette.responses import Response
 from starlette.background import BackgroundTask
+from starlette.responses import Response
 
 
 class TileResponse(Response):
@@ -23,3 +23,9 @@ class TileResponse(Response):
         self.media_type = media_type
         self.background = background
         self.init_headers(headers)
+
+
+class XMLResponse(Response):
+    """XML Response"""
+
+    media_type = "application/xml"

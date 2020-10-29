@@ -1,5 +1,3 @@
 """rio_viz."""
 
-import pkg_resources
-
-version = pkg_resources.get_distribution(__package__).version
+__version__ = "0.3.0"
