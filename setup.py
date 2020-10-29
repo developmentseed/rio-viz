@@ -9,11 +9,12 @@ with open("README.md") as f:
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler>=2.0b8",
+    "rio-tiler>=2.0.0b19",
     "rio-color",
     "fastapi~=0.61",
     "uvicorn",
     "jinja2",
+    "braceexpand",
 ]
 
 extra_reqs = {

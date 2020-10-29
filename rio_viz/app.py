@@ -154,51 +154,16 @@ class viz:
         """Register Middleware to the FastAPI app."""
 
         @self.app.get(
-            "/tiles/{z}/{x}/{y}.{ext}",
-            responses={
-                200: {
-                    "content": {"application/x-protobuf": {}},
-                    "description": "Return a Mapbox Vector Tile.",
-                }
-            },
-            description="Read COG and return a tile",
-        )
-        async def mvt(
-            z: int,
-            x: int,
-            y: int,
-            ext: VectorType,
-            tilesize: int = 128,
-            feature_type: str = Query(
-                None, title="Feature type", regex="^(point)|(polygon)$"
-            ),
-            resampling_method: ResamplingNames = Query(
-                ResamplingNames.nearest, description="Resampling method."  # type: ignore
-            ),
-        ):
-            """Handle /mvt requests."""
-            async with self.reader(self.src_path) as src_dst:
-                kwargs = self._get_options(src_dst)
-                tile, mask = await src_dst.tile(
-                    x,
-                    y,
-                    z,
-                    tilesize=tilesize,
-                    resampling_method=resampling_method.name,
-                    **kwargs,
-                )
-                bands = kwargs.get("bands", kwargs.get("assets", None))
-
-            content = await _mvt_encoder(tile, mask, bands, feature_type=feature_type)  # type: ignore
-
-            return TileResponse(content, media_type=mimetype[ext.value])
-
-        @self.app.get(
             r"/tiles/{z}/{x}/{y}",
             responses={
                 200: {
-                    "content": {"image/png": {}, "image/jpg": {}, "image/webp": {}},
-                    "description": "Return an image.",
+                    "content": {
+                        "image/png": {},
+                        "image/jpg": {},
+                        "image/webp": {},
+                        "application/x-protobuf": {},
+                    },
+                    "description": "Return a tile.",
                 }
             },
             response_class=TileResponse,
@@ -220,7 +185,7 @@ class viz:
             x: int,
             y: int,
             scale: int = Query(2, gt=0, lt=4),
-            ext: ImageType = None,
+            ext: Union[ImageType, VectorType] = None,
             indexes: Optional[str] = Query(
                 None, description="Coma (',') delimited band indexes"
             ),
@@ -234,8 +199,16 @@ class viz:
             resampling_method: ResamplingNames = Query(
                 ResamplingNames.nearest, description="Resampling method."  # type: ignore
             ),
+            feature_type: str = Query(
+                None,
+                title="Feature type (Only for Vector)",
+                regex="^(point)|(polygon)$",
+            ),
         ):
             """Handle /tiles requests."""
+            if ext and ext in [VectorType.pbf, VectorType.mvt]:
+                scale = 1
+
             tilesize = scale * 256
             async with self.reader(self.src_path) as src_dst:
                 kwargs = self._get_options(src_dst, indexes)
@@ -248,20 +221,26 @@ class viz:
                     **kwargs,
                 )
 
-            tile = await _postprocess_tile(
-                tile, mask, rescale=rescale, color_formula=color_formula
-            )
+                bands = kwargs.get("bands", kwargs.get("assets", None))
 
-            if not ext:
-                ext = ImageType.jpg if mask.all() else ImageType.png
+            if ext and ext in [VectorType.pbf, VectorType.mvt]:
+                content = await _mvt_encoder(tile, mask, bands, feature_type=feature_type)  # type: ignore
+            else:
+                tile = await _postprocess_tile(
+                    tile, mask, rescale=rescale, color_formula=color_formula
+                )
+                if not ext:
+                    ext = ImageType.jpg if mask.all() else ImageType.png
 
-            driver = drivers[ext]
-            options = img_profiles.get(driver.lower(), {})
-            options["colormap"] = (
-                cmap.get(color_map) if color_map else getattr(src_dst, "colormap", None)
-            )
+                driver = drivers[ext]
+                options = img_profiles.get(driver.lower(), {})
+                options["colormap"] = (
+                    cmap.get(color_map)
+                    if color_map
+                    else getattr(src_dst, "colormap", None)
+                )
+                content = await _render(tile, mask, img_format=driver, **options)
 
-            content = await _render(tile, mask, img_format=driver, **options)
             return TileResponse(content, media_type=mimetype[ext.value])
 
         @self.app.get(
@@ -346,13 +325,7 @@ class viz:
             if tile_format:
                 kwargs["ext"] = tile_format.value
 
-            endpoint_name = (
-                "mvt"
-                if tile_format and tile_format in [VectorType.pbf, VectorType.mvt]
-                else "tile"
-            )
-
-            tile_url = request.url_for(endpoint_name, **kwargs)
+            tile_url = request.url_for("tile", **kwargs)
 
             kwargs = dict(request.query_params)
             kwargs.pop("tile_format", None)
@@ -418,6 +391,9 @@ class viz:
             resampling_method: ResamplingNames = Query(  # noqa
                 ResamplingNames.nearest, description="Resampling method."  # type: ignore
             ),
+            feature_type: str = Query(  # noqa
+                None, title="Feature type", regex="^(point)|(polygon)$"
+            ),
         ):
             """
             This is a hidden gem.
@@ -479,7 +455,7 @@ class viz:
             )
 
     @property
-    def endpoint_url(self) -> str:
+    def endpoint(self) -> str:
         """Get endpoint url."""
         return f"http://{self.host}:{self.port}"
 

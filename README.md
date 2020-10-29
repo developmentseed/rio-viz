@@ -49,7 +49,7 @@ $ pip install -e .
 
 ```bash
 $ rio viz --help
-Usage: rio viz [OPTIONS] SRC_PATHS...
+Usage: rio viz [OPTIONS] SRC_PATH
 
   Rasterio Viz cli.
 
@@ -62,9 +62,11 @@ Options:
   --host TEXT                Webserver host url (default: 127.0.0.1)
   --mapbox-token TOKEN       Pass Mapbox token
   --no-check                 Ignore COG validation
+  --reader TEXT              rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`
+  --layers TEXT              limit to specific layers (indexes, bands, assets)
+  --config NAME=VALUE        GDAL configuration options.
   --help                     Show this message and exit.
 
-Note:
 ```
 
 ## 3D (Experimental)
@@ -72,6 +74,28 @@ Note:
 rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature was added to visualize sparse data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.
 
 ![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
+
+
+## Multi Reader support
+
+rio-viz support multiple/custom reader as long they are subclass of `rio_tiler.io.base.BaseReader` or `rio_tiler.io.base.AsyncBaseReader`.
+
+```bash
+# MultiFiles
+$ rio viz "cog_band{2,3,4}.tif" \
+  --reader rio_viz.io.reader.MultiFilesReader
+
+# Landsat 8 - rio-tiler-pds
+$ rio viz LC08_L1TP_013031_20130930_20170308_01_T1 \
+  --reader rio_tiler_pds.landsat.aws.landsat8.L8Reader \
+  --layers B1,B2 \
+  --config GDAL_DISABLE_READDIR_ON_OPEN=FALSE \
+  --config CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".TIF,.ovr"
+
+# aiocogeo
+$ rio viz https://naipblobs.blob.core.windows.net/naip/v002/al/2019/al_60cm_2019/30087/m_3008701_ne_16_060_20191115.tif \
+  --reader aiocogeo.tiler.COGTiler
+```
 
 
 ## Contribution & Development

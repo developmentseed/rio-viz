@@ -104,7 +104,11 @@ class NodataParamType(click.ParamType):
     help="Pass Mapbox token",
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
-@click.option("--reader", type=str, help="Reader")
+@click.option(
+    "--reader",
+    type=str,
+    help="rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`",
+)
 @click.option(
     "--layers", type=str, help="limit to specific layers (indexes, bands, assets)"
 )
