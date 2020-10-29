@@ -12,8 +12,9 @@ from rasterio.rio import options
 from rio_cogeo.cogeo import cog_translate, cog_validate
 from rio_cogeo.profiles import cog_profiles
 
-from rio_tiler.io import BaseReader, COGReader
-from rio_viz import app, raster
+from rio_tiler.io import AsyncBaseReader, BaseReader, COGReader
+from rio_viz import app
+from rio_viz.compat import AsyncReader
 
 
 @contextmanager
@@ -134,7 +135,7 @@ def viz(
     if reader:
         module, classname = reader.rsplit(".", 1)
         reader = getattr(importlib.import_module(module), classname)  # noqa
-        if not issubclass(reader, BaseReader):
+        if not issubclass(reader, (BaseReader, AsyncBaseReader)):
             warnings.warn("Reader should be a subclass of rio_tiler.io.BaseReader")
 
     dataset_reader = reader or COGReader
@@ -157,21 +158,24 @@ def viz(
             cog_translate(src_path, tmp_path.name, output_profile, config=config)
             src_path = tmp_path.name
 
-        src_dst = raster.RasterTiles(
-            src_path,
-            reader=dataset_reader,
-            nodata=nodata,
-            minzoom=minzoom,
-            maxzoom=maxzoom,
-            layers=layers,
-        )
+        # Dynamically create an Async Dataset Reader if not a subclass of AsyncBaseReader
+        if not issubclass(dataset_reader, AsyncBaseReader):
+            dataset_reader = type(
+                "AsyncReader", (AsyncReader,), {"reader": dataset_reader}
+            )
+
         application = app.viz(
-            src_dst,
+            src_path=src_path,
+            reader=dataset_reader,
             token=mapbox_token,
             port=port,
             host=host,
             style=style,
             config=config,
+            minzoom=minzoom,
+            maxzoom=maxzoom,
+            nodata=nodata,
+            layers=layers,
         )
         click.echo(f"Viewer started at {application.template_url}", err=True)
         click.launch(application.template_url)

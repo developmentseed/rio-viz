@@ -11,7 +11,7 @@ inst_reqs = [
     "rio-cogeo",
     "rio-tiler>=2.0b8",
     "rio-color",
-    "fastapi~=0.60.1",
+    "fastapi~=0.61",
     "uvicorn",
     "jinja2",
 ]
@@ -24,7 +24,7 @@ extra_reqs = {
 
 setup(
     name="rio-viz",
-    version="0.4.0",
+    version="0.3.0",
     python_requires=">=3",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
     long_description=long_description,

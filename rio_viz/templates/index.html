@@ -492,8 +492,10 @@
       const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
       const indexes = active_layer.getAttribute('band')
 
-      const sMin = scope.config[indexes].min
+      let sMin = scope.config[indexes].min
       const sMax = scope.config[indexes].max
+      if (sMin === sMax) sMin = sMin - 0.00001
+
       addHisto1Band()
 
       const propName = active_layer.value
