@@ -1,6 +1,5 @@
 """rio_viz app."""
 
-import asyncio
 import pathlib
 import urllib.parse
 from enum import Enum
@@ -8,13 +7,10 @@ from functools import partial
 from typing import Any, Dict, Optional, Type, Union
 
 import attr
-import numpy
 import rasterio
 import uvicorn
 from fastapi import FastAPI, Query
 from rasterio.enums import Resampling
-from rio_color.operations import parse_operations
-from rio_color.utils import scale_dtype, to_math_type
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -24,13 +20,10 @@ from starlette.templating import Jinja2Templates
 
 from rio_tiler.colormap import cmap
 from rio_tiler.io import AsyncBaseReader
-from rio_tiler.profiles import img_profiles
-from rio_tiler.utils import _chunks, linear_rescale, render
+from rio_tiler.models import Info, Metadata
 
 from .models.mapbox import TileJSON
-from .models.responses import MetadataModel
-from .ressources.common import drivers, mimetype
-from .ressources.enums import ImageType, VectorType
+from .ressources.enums import ImageType, MimeTypes, VectorType
 from .ressources.responses import TileResponse, XMLResponse
 
 try:
@@ -45,45 +38,13 @@ template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
 
 
-def postprocess_tile(
-    tile: numpy.ndarray,
-    mask: numpy.ndarray,
-    rescale: str = None,
-    color_formula: str = None,
-) -> numpy.ndarray:
-    """Post-process tile data."""
-    if rescale:
-        rescale_arr = list(map(float, rescale.split(",")))
-        rescale_arr = list(_chunks(rescale_arr, 2))
-        if len(rescale_arr) != tile.shape[0]:
-            rescale_arr = ((rescale_arr[0]),) * tile.shape[0]
-
-        for bdx in range(tile.shape[0]):
-            tile[bdx] = numpy.where(
-                mask,
-                linear_rescale(
-                    tile[bdx], in_range=rescale_arr[bdx], out_range=[0, 255]
-                ),
-                0,
-            )
-        tile = tile.astype(numpy.uint8)
-
-    if color_formula:
-        # make sure one last time we don't have
-        # negative value before applying color formula
-        tile[tile < 0] = 0
-        for ops in parse_operations(color_formula):
-            tile = scale_dtype(ops(to_math_type(tile)), numpy.uint8)
-
-    return tile
-
-
-_postprocess_tile = partial(run_in_threadpool, postprocess_tile)
-_render = partial(run_in_threadpool, render)
 _mvt_encoder = partial(run_in_threadpool, mvt_encoder)
 
 ResamplingNames = Enum(  # type: ignore
     "ResamplingNames", [(r.name, r.name) for r in Resampling]
+)
+ColorMapNames = Enum(  # type: ignore
+    "ColorMapNames", [(a, a) for a in sorted(cmap.list())]
 )
 
 
@@ -132,13 +93,12 @@ class viz:
         bands = getattr(src_dst, "bands", None)
 
         if indexes:
-            bidx = tuple(int(s) for s in indexes.split(","))
             if assets:
-                kwargs["assets"] = [assets[b - 1] for b in bidx]
+                kwargs["assets"] = indexes.split(",")
             elif bands:
-                kwargs["bands"] = [bands[b - 1] for b in bidx]
+                kwargs["bands"] = indexes.split(",")
             else:
-                kwargs["indexes"] = bidx
+                kwargs["indexes"] = tuple(int(s) for s in indexes.split(","))
         else:
             if assets:
                 kwargs["assets"] = self.layers.split(",") if self.layers else assets
@@ -151,7 +111,7 @@ class viz:
         return kwargs
 
     def register_routes(self):
-        """Register Middleware to the FastAPI app."""
+        """Register routes to the FastAPI app."""
 
         @self.app.get(
             r"/tiles/{z}/{x}/{y}",
@@ -170,7 +130,7 @@ class viz:
             description="Read COG and return a tile",
         )
         @self.app.get(
-            r"/tiles/{z}/{x}/{y}.{ext}",
+            r"/tiles/{z}/{x}/{y}.{format}",
             responses={
                 200: {
                     "content": {"image/png": {}, "image/jpg": {}, "image/webp": {}},
@@ -185,7 +145,7 @@ class viz:
             x: int,
             y: int,
             scale: int = Query(2, gt=0, lt=4),
-            ext: Union[ImageType, VectorType] = None,
+            format: Optional[Union[ImageType, VectorType]] = None,
             indexes: Optional[str] = Query(
                 None, description="Coma (',') delimited band indexes"
             ),
@@ -193,8 +153,8 @@ class viz:
                 None, description="Coma (',') delimited Min,Max bounds"
             ),
             color_formula: Optional[str] = Query(None, description="rio-color formula"),
-            color_map: Optional[str] = Query(
-                None, description="rio-tiler color map names"
+            color_map: Optional[ColorMapNames] = Query(
+                None, description="rio-tiler's colormap name"
             ),
             resampling_method: ResamplingNames = Query(
                 ResamplingNames.nearest, description="Resampling method."  # type: ignore
@@ -206,13 +166,14 @@ class viz:
             ),
         ):
             """Handle /tiles requests."""
-            if ext and ext in [VectorType.pbf, VectorType.mvt]:
-                scale = 1
-
             tilesize = scale * 256
-            async with self.reader(self.src_path) as src_dst:
+
+            if format and format in [VectorType.pbf, VectorType.mvt]:
+                tilesize = 128
+
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
                 kwargs = self._get_options(src_dst, indexes)
-                tile, mask = await src_dst.tile(
+                tile_data = await src_dst.tile(
                     x,
                     y,
                     z,
@@ -221,31 +182,53 @@ class viz:
                     **kwargs,
                 )
 
-                bands = kwargs.get("bands", kwargs.get("assets", None))
+                bands = kwargs.get("bands", kwargs.get("assets", None)) or [
+                    f"{ix + 1}" for ix in range(tile_data.count)
+                ]
 
-            if ext and ext in [VectorType.pbf, VectorType.mvt]:
-                content = await _mvt_encoder(tile, mask, bands, feature_type=feature_type)  # type: ignore
+            if format and format in [VectorType.pbf, VectorType.mvt]:
+                content = await _mvt_encoder(
+                    tile_data.data, tile_data.mask, bands, feature_type=feature_type,
+                )  # type: ignore
             else:
-                tile = await _postprocess_tile(
-                    tile, mask, rescale=rescale, color_formula=color_formula
+                in_range = list(map(float, rescale.split(","))) if rescale else None
+                image = tile_data.post_process(
+                    in_range=in_range, color_formula=color_formula
                 )
-                if not ext:
-                    ext = ImageType.jpg if mask.all() else ImageType.png
 
-                driver = drivers[ext]
-                options = img_profiles.get(driver.lower(), {})
-                options["colormap"] = (
-                    cmap.get(color_map)
+                if not format:
+                    format = ImageType.jpg if tile_data.mask.all() else ImageType.png
+
+                colormap = (
+                    cmap.get(color_map.value)
                     if color_map
                     else getattr(src_dst, "colormap", None)
                 )
-                content = await _render(tile, mask, img_format=driver, **options)
+                content = image.render(
+                    img_format=format.driver, colormap=colormap, **format.profile,
+                )
 
-            return TileResponse(content, media_type=mimetype[ext.value])
+            return TileResponse(content, media_type=MimeTypes[format.value].value)
+
+        @self.app.get(
+            "/point", responses={200: {"description": "Return a point value."}},
+        )
+        async def point(
+            coordinates: str = Query(
+                ..., title="Coma (',') delimited lon,lat coordinates"
+            ),
+        ):
+            """Handle /point requests."""
+            lon, lat = list(map(float, coordinates.split(",")))
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                kwargs = self._get_options(src_dst)
+                results = await src_dst.point(lon, lat, **kwargs)
+
+            return {"coordinates": [lon, lat], "value": results}
 
         @self.app.get(
             "/metadata",
-            response_model=MetadataModel,
+            response_model=Union[Dict[str, Metadata], Metadata],
             response_model_exclude={"minzoom", "maxzoom", "center"},
             response_model_exclude_none=True,
             responses={200: {"description": "Return the metadata of the COG."}},
@@ -258,37 +241,20 @@ class viz:
             ),
         ):
             """Handle /metadata requests."""
-            async with self.reader(self.src_path) as src_dst:
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
                 kwargs = self._get_options(src_dst, indexes)
-                info, stats = await asyncio.gather(
-                    *[src_dst.info(**kwargs), src_dst.stats(pmin, pmax, **kwargs)]
-                )
-                info["statistics"] = stats
-                return info
-
-        @self.app.get(
-            "/point", responses={200: {"description": "Return a point value."}},
-        )
-        async def point(
-            coordinates: str = Query(
-                ..., title="Coma (',') delimited lon,lat coordinates"
-            ),
-        ):
-            """Handle /point requests."""
-            lon, lat = list(map(float, coordinates.split(",")))
-            async with self.reader(self.src_path) as src_dst:
-                kwargs = self._get_options(src_dst)
-                results = await src_dst.point(lon, lat, **kwargs)
-
-            return {"coordinates": [lon, lat], "value": results}
+                return await src_dst.metadata(pmin, pmax, **kwargs)
 
         @self.app.get(
             "/info",
+            response_model=Union[Dict[str, Info], Info],
+            response_model_exclude={"minzoom", "maxzoom", "center"},
+            response_model_exclude_none=True,
             responses={200: {"description": "Return the metadata of the COG."}},
         )
         async def info():
             """Handle /info requests."""
-            async with self.reader(self.src_path) as src_dst:
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
                 kwargs = self._get_options(src_dst)
                 return await src_dst.info(**kwargs)
 
@@ -310,8 +276,8 @@ class viz:
             color_formula: Optional[str] = Query(
                 None, description="rio-color formula"
             ),  # noqa
-            color_map: Optional[str] = Query(  # noqa
-                None, description="rio-tiler color map names"
+            color_map: Optional[ColorMapNames] = Query(  # noqa
+                None, description="rio-tiler's colormap name"
             ),
             resampling_method: ResamplingNames = Query(  # noqa
                 ResamplingNames.nearest, description="Resampling method."  # type: ignore
@@ -323,7 +289,7 @@ class viz:
             """Handle /tilejson.json requests."""
             kwargs: Dict[str, Any] = {"z": "{z}", "x": "{x}", "y": "{y}"}
             if tile_format:
-                kwargs["ext"] = tile_format.value
+                kwargs["format"] = tile_format.value
 
             tile_url = request.url_for("tile", **kwargs)
 
@@ -333,7 +299,7 @@ class viz:
             if qs:
                 tile_url += f"?{qs}"
 
-            async with self.reader(self.src_path) as src_dst:
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
                 bounds = src_dst.bounds
                 center = src_dst.center
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
@@ -385,8 +351,8 @@ class viz:
             color_formula: Optional[str] = Query(
                 None, description="rio-color formula"
             ),  # noqa
-            color_map: Optional[str] = Query(  # noqa
-                None, description="rio-tiler color map names"
+            color_map: Optional[ColorMapNames] = Query(  # noqa
+                None, description="rio-tiler's colormap name"
             ),
             resampling_method: ResamplingNames = Query(  # noqa
                 ResamplingNames.nearest, description="Resampling method."  # type: ignore
@@ -406,7 +372,7 @@ class viz:
                 "z": "{TileMatrix}",
                 "x": "{TileCol}",
                 "y": "{TileRow}",
-                "ext": tile_format.value,
+                "format": tile_format.value,
             }
             tiles_endpoint = request.url_for("tile", **kwargs)
 
@@ -420,7 +386,7 @@ class viz:
             if qs:
                 tiles_endpoint += f"?{qs}"
 
-            async with self.reader(self.src_path) as src_dst:
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
                 bounds = src_dst.bounds
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
@@ -438,7 +404,7 @@ class viz:
                 </TileMatrix>"""
                 tileMatrix.append(tm)
 
-            media_type = mimetype[tile_format.value]
+            media_type = MimeTypes[tile_format.value].value
 
             return templates.TemplateResponse(
                 "wmts.xml",

@@ -131,7 +131,7 @@ def test_viz_multi():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     assert response.json()["band_descriptions"] == [
-        [1, "band1"],
-        [2, "band2"],
-        [3, "band3"],
+        ["file1", ""],
+        ["file2", ""],
+        ["file3", ""],
     ]
