@@ -29,7 +29,7 @@ class MultiFilesReader(MultiBandReader):
         """Fetch Reference band to get the bounds."""
         self.files = list(braceexpand(self.filepath))
         self.indexes = [ix + 1 for ix in range(len(self.files))]
-        self.bands = [f"band{ix}" for ix in self.indexes]
+        self.bands = [f"file{ix}" for ix in self.indexes]
 
         with self.reader(self.files[0], tms=self.tms, **self.reader_options) as cog:
             self.bounds = cog.bounds
