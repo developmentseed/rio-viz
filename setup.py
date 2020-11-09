@@ -9,8 +9,7 @@ with open("README.md") as f:
 inst_reqs = [
     "click",
     "rio-cogeo",
-    "rio-tiler>=2.0.0b19",
-    "rio-color",
+    "rio-tiler>=2.0.0rc1",
     "fastapi~=0.61",
     "uvicorn",
     "jinja2",
