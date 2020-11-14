@@ -1,4 +1,8 @@
 
+## 0.4.1 (2020-11-13)
+
+* add `--server-only` options and add preview/part API.
+
 ## 0.4.0 (2020-11-09)
 
 **Refactor**

@@ -64,6 +64,7 @@ Options:
   --no-check                 Ignore COG validation
   --reader TEXT              rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`
   --layers TEXT              limit to specific layers (indexes, bands, assets)
+  --server-only              Launch API without opening the rio-viz web-page.
   --config NAME=VALUE        GDAL configuration options.
   --help                     Show this message and exit.
 
@@ -96,6 +97,33 @@ $ rio viz LC08_L1TP_013031_20130930_20170308_01_T1 \
 $ rio viz https://naipblobs.blob.core.windows.net/naip/v002/al/2019/al_60cm_2019/30087/m_3008701_ne_16_060_20191115.tif \
   --reader aiocogeo.tiler.COGTiler
 ```
+
+## RestAPI
+
+When launching rio-viz, the application will create a FastAPI application to access and read the data you want. By default the CLI will open a web-page for you to explore your file but you can use `--server-only` option to ignore this.
+
+```bash
+$ rio viz my.tif --server-only
+
+# In another console
+$ curl http://127.0.0.1:8080/info | jq
+{
+  "bounds": [6.608576517072109, 51.270642883468895, 11.649386808679436, 53.89267160832534],
+  "band_metadata": [...],
+  "band_descriptions": [...],
+  "dtype": "uint8",
+  "nodata_type": "Mask",
+  "colorinterp": [
+    "red",
+    "green",
+    "blue"
+  ]
+}
+```
+
+You can see the full API documentation over `http://127.0.0.1:8080/docs`
+
+![API documentation](https://user-images.githubusercontent.com/10407788/99135093-a7a53b80-25ee-11eb-98ba-0ce932775791.png)
 
 
 ## Contribution & Development
