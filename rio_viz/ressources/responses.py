@@ -4,8 +4,8 @@ from starlette.background import BackgroundTask
 from starlette.responses import Response
 
 
-class TileResponse(Response):
-    """Tiler's response."""
+class ImageResponse(Response):
+    """Image response."""
 
     def __init__(
         self,
@@ -18,6 +18,7 @@ class TileResponse(Response):
         """Init tiler response."""
         headers.update({"Content-Type": media_type})
         headers.update({"Cache-Control": "no-cache"})
+
         self.body = self.render(content)
         self.status_code = 200
         self.media_type = media_type

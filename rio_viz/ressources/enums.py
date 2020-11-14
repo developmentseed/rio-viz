@@ -3,6 +3,9 @@
 from enum import Enum
 from types import DynamicClassAttribute
 
+from rasterio.enums import Resampling
+
+from rio_tiler.colormap import cmap
 from rio_tiler.profiles import img_profiles
 
 drivers = dict(jpg="JPEG", png="PNG", tif="GTiff", webp="WEBP")
@@ -65,3 +68,22 @@ class MimeTypes(str, Enum):
     json = "application/json"
     html = "text/html"
     text = "text/plain"
+
+
+ResamplingNames = Enum(  # type: ignore
+    "ResamplingNames", [(r.name, r.name) for r in Resampling]
+)
+
+
+class ColormapEnumFactory(Enum):
+    """Rio-Tiler colormaps."""
+
+    @DynamicClassAttribute
+    def data(self):
+        """Return rio-tiler image default profile."""
+        return cmap.get(self._name_)
+
+
+ColorMaps = ColormapEnumFactory(  # type: ignore
+    "ColorMaps", [(a, a) for a in sorted(cmap.list())]
+)

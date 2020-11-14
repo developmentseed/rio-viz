@@ -2,15 +2,13 @@
 
 import pathlib
 import urllib.parse
-from enum import Enum
 from functools import partial
 from typing import Any, Dict, Optional, Type, Union
 
 import attr
 import rasterio
 import uvicorn
-from fastapi import FastAPI, Query
-from rasterio.enums import Resampling
+from fastapi import Depends, FastAPI, Path, Query
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -18,13 +16,13 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse
 from starlette.templating import Jinja2Templates
 
-from rio_tiler.colormap import cmap
 from rio_tiler.io import AsyncBaseReader
 from rio_tiler.models import Info, Metadata
 
+from .dependencies import ImageParams
 from .models.mapbox import TileJSON
 from .ressources.enums import ImageType, MimeTypes, VectorType
-from .ressources.responses import TileResponse, XMLResponse
+from .ressources.responses import ImageResponse, XMLResponse
 
 try:
     from rio_tiler_mvt.mvt import encoder as mvt_encoder  # noqa
@@ -39,13 +37,6 @@ templates = Jinja2Templates(directory=template_dir)
 
 
 _mvt_encoder = partial(run_in_threadpool, mvt_encoder)
-
-ResamplingNames = Enum(  # type: ignore
-    "ResamplingNames", [(r.name, r.name) for r in Resampling]
-)
-ColorMapNames = Enum(  # type: ignore
-    "ColorMapNames", [(a, a) for a in sorted(cmap.list())]
-)
 
 
 @attr.s
@@ -121,23 +112,30 @@ class viz:
                         "image/png": {},
                         "image/jpg": {},
                         "image/webp": {},
+                        "application/x-binary": {},
                         "application/x-protobuf": {},
                     },
                     "description": "Return a tile.",
                 }
             },
-            response_class=TileResponse,
+            response_class=ImageResponse,
             description="Read COG and return a tile",
         )
         @self.app.get(
             r"/tiles/{z}/{x}/{y}.{format}",
             responses={
                 200: {
-                    "content": {"image/png": {}, "image/jpg": {}, "image/webp": {}},
+                    "content": {
+                        "image/png": {},
+                        "image/jpg": {},
+                        "image/webp": {},
+                        "application/x-binary": {},
+                        "application/x-protobuf": {},
+                    },
                     "description": "Return an image.",
                 }
             },
-            response_class=TileResponse,
+            response_class=ImageResponse,
             description="Read COG and return a tile",
         )
         async def tile(
@@ -149,16 +147,7 @@ class viz:
             indexes: Optional[str] = Query(
                 None, description="Coma (',') delimited band indexes"
             ),
-            rescale: Optional[str] = Query(
-                None, description="Coma (',') delimited Min,Max bounds"
-            ),
-            color_formula: Optional[str] = Query(None, description="rio-color formula"),
-            color_map: Optional[ColorMapNames] = Query(
-                None, description="rio-tiler's colormap name"
-            ),
-            resampling_method: ResamplingNames = Query(
-                ResamplingNames.nearest, description="Resampling method."  # type: ignore
-            ),
+            image_params: ImageParams = Depends(),
             feature_type: str = Query(
                 None,
                 title="Feature type (Only for Vector)",
@@ -178,7 +167,7 @@ class viz:
                     y,
                     z,
                     tilesize=tilesize,
-                    resampling_method=resampling_method.name,
+                    resampling_method=image_params.resampling_method.name,
                     **kwargs,
                 )
 
@@ -191,31 +180,142 @@ class viz:
                     tile_data.data, tile_data.mask, bands, feature_type=feature_type,
                 )  # type: ignore
             else:
-                in_range = list(map(float, rescale.split(","))) if rescale else None
-                image = tile_data.post_process(
-                    in_range=in_range, color_formula=color_formula
-                )
-
                 if not format:
                     format = ImageType.jpg if tile_data.mask.all() else ImageType.png
 
-                colormap = (
-                    cmap.get(color_map.value)
-                    if color_map
-                    else getattr(src_dst, "colormap", None)
+                image = tile_data.post_process(
+                    in_range=image_params.rescale_range,
+                    color_formula=image_params.color_formula,
                 )
+
+                colormap = image_params.colormap or getattr(src_dst, "colormap", None)
                 content = image.render(
                     img_format=format.driver, colormap=colormap, **format.profile,
                 )
 
-            return TileResponse(content, media_type=MimeTypes[format.value].value)
+            return ImageResponse(content, media_type=MimeTypes[format.value].value)
+
+        @self.app.get(
+            r"/preview",
+            responses={
+                200: {
+                    "content": {
+                        "image/png": {},
+                        "image/jpg": {},
+                        "image/webp": {},
+                        "application/x-binary": {},
+                    },
+                    "description": "Return a preview.",
+                }
+            },
+            response_class=ImageResponse,
+            description="Return a preview",
+        )
+        @self.app.get(
+            r"/preview.{format}",
+            responses={
+                200: {
+                    "content": {
+                        "image/png": {},
+                        "image/jpg": {},
+                        "image/webp": {},
+                        "application/x-binary": {},
+                    },
+                    "description": "Return a preview.",
+                }
+            },
+            response_class=ImageResponse,
+            description="Return a preview.",
+        )
+        async def preview(
+            format: Optional[ImageType] = None,
+            indexes: Optional[str] = Query(
+                None, description="Coma (',') delimited band indexes"
+            ),
+            max_size: int = 1024,
+            image_params: ImageParams = Depends(),
+        ):
+            """Handle /tiles requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                kwargs = self._get_options(src_dst, indexes)
+                data = await src_dst.preview(
+                    max_size=max_size,
+                    resampling_method=image_params.resampling_method.name,
+                    **kwargs,
+                )
+                if not format:
+                    format = ImageType.jpg if data.mask.all() else ImageType.png
+
+                image = data.post_process(
+                    in_range=image_params.rescale_range,
+                    color_formula=image_params.color_formula,
+                )
+
+                colormap = image_params.colormap or getattr(src_dst, "colormap", None)
+                content = image.render(
+                    img_format=format.driver, colormap=colormap, **format.profile,
+                )
+
+            return ImageResponse(content, media_type=MimeTypes[format.value].value)
+
+        @self.app.get(
+            r"/part/{minx},{miny},{maxx},{maxy}.{format}",
+            responses={
+                200: {
+                    "content": {
+                        "image/png": {},
+                        "image/jpg": {},
+                        "image/webp": {},
+                        "application/x-binary": {},
+                    },
+                    "description": "Return a part of a dataset.",
+                }
+            },
+            response_class=ImageResponse,
+            description="Return a preview.",
+        )
+        async def part(
+            minx: float = Path(..., description="Bounding box min X"),
+            miny: float = Path(..., description="Bounding box min Y"),
+            maxx: float = Path(..., description="Bounding box max X"),
+            maxy: float = Path(..., description="Bounding box max Y"),
+            format: ImageType = Query(None, description="Output image type."),
+            indexes: Optional[str] = Query(
+                None, description="Coma (',') delimited band indexes"
+            ),
+            max_size: int = 1024,
+            image_params: ImageParams = Depends(),
+        ):
+            """Handle /tiles requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                kwargs = self._get_options(src_dst, indexes)
+                data = await src_dst.part(
+                    [minx, miny, maxx, maxy],
+                    max_size=max_size,
+                    resampling_method=image_params.resampling_method.name,
+                    **kwargs,
+                )
+                if not format:
+                    format = ImageType.jpg if data.mask.all() else ImageType.png
+
+                image = data.post_process(
+                    in_range=image_params.rescale_range,
+                    color_formula=image_params.color_formula,
+                )
+
+                colormap = image_params.colormap or getattr(src_dst, "colormap", None)
+                content = image.render(
+                    img_format=format.driver, colormap=colormap, **format.profile,
+                )
+
+            return ImageResponse(content, media_type=MimeTypes[format.value].value)
 
         @self.app.get(
             "/point", responses={200: {"description": "Return a point value."}},
         )
         async def point(
             coordinates: str = Query(
-                ..., title="Coma (',') delimited lon,lat coordinates"
+                ..., description="Coma (',') delimited lon,lat coordinates"
             ),
         ):
             """Handle /point requests."""
@@ -236,6 +336,7 @@ class viz:
         async def metadata(
             pmin: float = 2.0,
             pmax: float = 98.0,
+            max_size: int = 1024,
             indexes: Optional[str] = Query(
                 None, title="Coma (',') delimited band indexes"
             ),
@@ -243,7 +344,7 @@ class viz:
             """Handle /metadata requests."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
                 kwargs = self._get_options(src_dst, indexes)
-                return await src_dst.metadata(pmin, pmax, **kwargs)
+                return await src_dst.metadata(pmin, pmax, max_size=max_size, **kwargs)
 
         @self.app.get(
             "/info",
@@ -270,18 +371,7 @@ class viz:
             indexes: Optional[str] = Query(  # noqa
                 None, description="Coma (',') delimited band indexes"
             ),
-            rescale: Optional[str] = Query(  # noqa
-                None, description="Coma (',') delimited Min,Max bounds"
-            ),
-            color_formula: Optional[str] = Query(
-                None, description="rio-color formula"
-            ),  # noqa
-            color_map: Optional[ColorMapNames] = Query(  # noqa
-                None, description="rio-tiler's colormap name"
-            ),
-            resampling_method: ResamplingNames = Query(  # noqa
-                ResamplingNames.nearest, description="Resampling method."  # type: ignore
-            ),
+            image_params: ImageParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
             ),
@@ -345,18 +435,7 @@ class viz:
             indexes: Optional[str] = Query(  # noqa
                 None, description="Coma (',') delimited band indexes"
             ),
-            rescale: Optional[str] = Query(  # noqa
-                None, description="Coma (',') delimited Min,Max bounds"
-            ),
-            color_formula: Optional[str] = Query(
-                None, description="rio-color formula"
-            ),  # noqa
-            color_map: Optional[ColorMapNames] = Query(  # noqa
-                None, description="rio-tiler's colormap name"
-            ),
-            resampling_method: ResamplingNames = Query(  # noqa
-                ResamplingNames.nearest, description="Resampling method."  # type: ignore
-            ),
+            image_params: ImageParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
             ),
@@ -429,6 +508,11 @@ class viz:
     def template_url(self) -> str:
         """Get simple app template url."""
         return f"http://{self.host}:{self.port}/index.html"
+
+    @property
+    def docs_url(self) -> str:
+        """Get simple app template url."""
+        return f"http://{self.host}:{self.port}/docs"
 
     def start(self):
         """Start tile server."""

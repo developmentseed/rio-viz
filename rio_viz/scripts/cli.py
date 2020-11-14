@@ -113,6 +113,12 @@ class NodataParamType(click.ParamType):
     "--layers", type=str, help="limit to specific layers (indexes, bands, assets)"
 )
 @click.option(
+    "--server-only",
+    is_flag=True,
+    default=False,
+    help="Launch API without opening the rio-viz web-page.",
+)
+@click.option(
     "--config",
     "config",
     metavar="NAME=VALUE",
@@ -132,6 +138,7 @@ def viz(
     no_check,
     reader,
     layers,
+    server_only,
     config,
 ):
     """Rasterio Viz cli."""
@@ -181,6 +188,8 @@ def viz(
             nodata=nodata,
             layers=layers,
         )
-        click.echo(f"Viewer started at {application.template_url}", err=True)
-        click.launch(application.template_url)
+        if not server_only:
+            click.echo(f"Viewer started at {application.template_url}", err=True)
+            click.launch(application.template_url)
+
         application.start()

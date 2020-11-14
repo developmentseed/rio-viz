@@ -80,8 +80,8 @@ class AsyncReader(AsyncBaseReader):
         self, bbox: Tuple[float, float, float, float], **kwargs: Any
     ) -> Coroutine[Any, Any, ImageData]:
         """Read a Part of a Dataset."""
-        pass
+        return await run_in_threadpool(self.dataset.part, bbox, **kwargs)  # type: ignore
 
     async def preview(self, **kwargs: Any) -> Coroutine[Any, Any, ImageData]:
         """Return a preview of a Dataset."""
-        pass
+        return await run_in_threadpool(self.dataset.preview, **kwargs)  # type: ignore
