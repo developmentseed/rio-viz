@@ -8,59 +8,16 @@ from rasterio.enums import Resampling
 from rio_tiler.colormap import cmap
 from rio_tiler.profiles import img_profiles
 
-drivers = dict(jpg="JPEG", png="PNG", tif="GTiff", webp="WEBP")
-
-
-class ImageType(str, Enum):
-    """Image Type Enums."""
-
-    png = "png"
-    npy = "npy"
-    tif = "tif"
-    jpg = "jpg"
-    webp = "webp"
-
-    @DynamicClassAttribute
-    def profile(self):
-        """Return rio-tiler image default profile."""
-        return img_profiles.get(self.driver.lower(), {})
-
-    @DynamicClassAttribute
-    def driver(self):
-        """Return rio-tiler image default profile."""
-        return drivers[self._name_]
-
-
-class VectorType(str, Enum):
-    """Vector Type Enums."""
-
-    pbf = "pbf"
-    mvt = "mvt"
-
-    @DynamicClassAttribute
-    def profile(self):
-        """Placeholder."""
-        pass
-
-    @DynamicClassAttribute
-    def driver(self):
-        """Placeholder."""
-        pass
-
 
 class MimeTypes(str, Enum):
-    """Image MineTypes."""
+    """MineTypes."""
 
-    geotiff = "image/tiff; application=geotiff"
-    tiff = "image/tiff"
-    tif = "image/tiff"
-    cog = "image/geo+tiff; application=geotiff; profile=cloud-optimized"
+    tif = "image/tiff; application=geotiff"
     jp2 = "image/jp2"
     png = "image/png"
+    pngraw = "image/png"
     jpeg = "image/jpeg"
-    jpg = "image/jpeg"
     webp = "image/webp"
-    binnary = "application/x-binary"
     npy = "application/x-binary"
     pbf = "application/x-protobuf"
     mvt = "application/x-protobuf"
@@ -70,9 +27,75 @@ class MimeTypes(str, Enum):
     text = "text/plain"
 
 
-ResamplingNames = Enum(  # type: ignore
-    "ResamplingNames", [(r.name, r.name) for r in Resampling]
-)
+class ImageDrivers(str, Enum):
+    """Rio-tiler supported output drivers."""
+
+    jpeg = "JPEG"
+    png = "PNG"
+    pngraw = "PNG"
+    tif = "GTiff"
+    webp = "WEBP"
+    jp2 = "JP2OpenJPEG"
+    npy = "NPY"
+
+
+class ImageType(Enum):
+    """Available Output Image type."""
+
+    png = "png"
+    npy = "npy"
+    tif = "tif"
+    jpeg = "jpg"
+    jp2 = "jp2"
+    webp = "webp"
+    pngraw = "pngraw"
+
+    @DynamicClassAttribute
+    def profile(self):
+        """Return rio-tiler image default profile."""
+        return img_profiles.get(self._name_, {})
+
+    @DynamicClassAttribute
+    def driver(self):
+        """Return rio-tiler image default profile."""
+        return ImageDrivers[self._name_].value
+
+    @DynamicClassAttribute
+    def mimetype(self):
+        """Return image mimetype."""
+        return MimeTypes[self._name_].value
+
+
+class TileType(Enum):
+    """Available Output Tile type."""
+
+    png = "png"
+    npy = "npy"
+    tif = "tif"
+    jpeg = "jpg"
+    jp2 = "jp2"
+    webp = "webp"
+    pngraw = "pngraw"
+    pbf = "pbf"
+    mvt = "mvt"
+
+    @DynamicClassAttribute
+    def profile(self):
+        """Return rio-tiler image default profile."""
+        return img_profiles.get(self._name_, {})
+
+    @DynamicClassAttribute
+    def driver(self):
+        """Return rio-tiler image default profile."""
+        try:
+            return ImageDrivers[self._name_].value
+        except KeyError:
+            return ""
+
+    @DynamicClassAttribute
+    def mimetype(self):
+        """Return image mimetype."""
+        return MimeTypes[self._name_].value
 
 
 class ColormapEnumFactory(Enum):
@@ -86,4 +109,8 @@ class ColormapEnumFactory(Enum):
 
 ColorMaps = ColormapEnumFactory(  # type: ignore
     "ColorMaps", [(a, a) for a in sorted(cmap.list())]
+)
+
+ResamplingNames = Enum(  # type: ignore
+    "ResamplingNames", [(r.name, r.name) for r in Resampling]
 )

@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Type, Union
 import attr
 import rasterio
 import uvicorn
-from fastapi import Depends, FastAPI, Path, Query
+from fastapi import APIRouter, Depends, FastAPI, Query
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -21,8 +21,9 @@ from rio_tiler.models import Info, Metadata
 
 from .dependencies import ImageParams
 from .models.mapbox import TileJSON
-from .ressources.enums import ImageType, MimeTypes, VectorType
+from .ressources.enums import ImageType, TileType
 from .ressources.responses import ImageResponse, XMLResponse
+from .utils import Timer
 
 try:
     from rio_tiler_mvt.mvt import encoder as mvt_encoder  # noqa
@@ -34,8 +35,6 @@ except ModuleNotFoundError:
 
 template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
-
-
 _mvt_encoder = partial(run_in_threadpool, mvt_encoder)
 
 
@@ -60,10 +59,15 @@ class viz:
     layers: Optional[str] = attr.ib(default=None)
     nodata: Optional[Union[str, int, float]] = attr.ib(default=None)
 
+    router: Optional[APIRouter] = attr.ib(init=False)
+
     def __attrs_post_init__(self):
         """Update App."""
+        self.router = APIRouter()
+
         self.register_middleware()
         self.register_routes()
+        self.app.include_router(self.router)
 
     def register_middleware(self):
         """Register Middleware to the FastAPI app."""
@@ -104,14 +108,16 @@ class viz:
     def register_routes(self):
         """Register routes to the FastAPI app."""
 
-        @self.app.get(
+        @self.router.get(
             r"/tiles/{z}/{x}/{y}",
             responses={
                 200: {
                     "content": {
                         "image/png": {},
-                        "image/jpg": {},
+                        "image/jpeg": {},
                         "image/webp": {},
+                        "image/jp2": {},
+                        "image/tiff; application=geotiff": {},
                         "application/x-binary": {},
                         "application/x-protobuf": {},
                     },
@@ -121,14 +127,16 @@ class viz:
             response_class=ImageResponse,
             description="Read COG and return a tile",
         )
-        @self.app.get(
+        @self.router.get(
             r"/tiles/{z}/{x}/{y}.{format}",
             responses={
                 200: {
                     "content": {
                         "image/png": {},
-                        "image/jpg": {},
+                        "image/jpeg": {},
                         "image/webp": {},
+                        "image/jp2": {},
+                        "image/tiff; application=geotiff": {},
                         "application/x-binary": {},
                         "application/x-protobuf": {},
                     },
@@ -143,7 +151,7 @@ class viz:
             x: int,
             y: int,
             scale: int = Query(2, gt=0, lt=4),
-            format: Optional[Union[ImageType, VectorType]] = None,
+            format: Optional[TileType] = None,
             indexes: Optional[str] = Query(
                 None, description="Coma (',') delimited band indexes"
             ),
@@ -155,54 +163,74 @@ class viz:
             ),
         ):
             """Handle /tiles requests."""
+            timings = []
+            headers: Dict[str, str] = {}
+
             tilesize = scale * 256
 
-            if format and format in [VectorType.pbf, VectorType.mvt]:
+            if format and format in [TileType.pbf, TileType.mvt]:
                 tilesize = 128
 
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                kwargs = self._get_options(src_dst, indexes)
-                tile_data = await src_dst.tile(
-                    x,
-                    y,
-                    z,
-                    tilesize=tilesize,
-                    resampling_method=image_params.resampling_method.name,
-                    **kwargs,
-                )
+            with Timer() as t:
+                async with self.reader(self.src_path) as src_dst:  # type: ignore
+                    kwargs = self._get_options(src_dst, indexes)
+                    tile_data = await src_dst.tile(
+                        x,
+                        y,
+                        z,
+                        tilesize=tilesize,
+                        resampling_method=image_params.resampling_method.name,
+                        **kwargs,
+                    )
+                    colormap = image_params.colormap or getattr(
+                        src_dst, "colormap", None
+                    )
+                    bands = kwargs.get("bands", kwargs.get("assets", None)) or [
+                        f"{ix + 1}" for ix in range(tile_data.count)
+                    ]
+            timings.append(("dataread", round(t.elapsed * 1000, 2)))
 
-                bands = kwargs.get("bands", kwargs.get("assets", None)) or [
-                    f"{ix + 1}" for ix in range(tile_data.count)
-                ]
-
-            if format and format in [VectorType.pbf, VectorType.mvt]:
-                content = await _mvt_encoder(
-                    tile_data.data, tile_data.mask, bands, feature_type=feature_type,
-                )  # type: ignore
+            if format and format in [TileType.pbf, TileType.mvt]:
+                with Timer() as t:
+                    content = await _mvt_encoder(
+                        tile_data.data,
+                        tile_data.mask,
+                        bands,
+                        feature_type=feature_type,
+                    )  # type: ignore
+                timings.append(("format", round(t.elapsed * 1000, 2)))
             else:
                 if not format:
-                    format = ImageType.jpg if tile_data.mask.all() else ImageType.png
+                    format = TileType.jpeg if tile_data.mask.all() else TileType.png
 
-                image = tile_data.post_process(
-                    in_range=image_params.rescale_range,
-                    color_formula=image_params.color_formula,
-                )
+                with Timer() as t:
+                    image = tile_data.post_process(
+                        in_range=image_params.rescale_range,
+                        color_formula=image_params.color_formula,
+                    )
+                timings.append(("postprocess", round(t.elapsed * 1000, 2)))
 
-                colormap = image_params.colormap or getattr(src_dst, "colormap", None)
-                content = image.render(
-                    img_format=format.driver, colormap=colormap, **format.profile,
-                )
+                with Timer() as t:
+                    content = image.render(
+                        img_format=format.driver, colormap=colormap, **format.profile,
+                    )
+                timings.append(("format", round(t.from_start * 1000, 2)))
 
-            return ImageResponse(content, media_type=MimeTypes[format.value].value)
+            headers["Server-Timing"] = ", ".join(
+                [f"{name};dur={time}" for (name, time) in timings]
+            )
+            return ImageResponse(content, media_type=format.mimetype, headers=headers)
 
-        @self.app.get(
+        @self.router.get(
             r"/preview",
             responses={
                 200: {
                     "content": {
                         "image/png": {},
-                        "image/jpg": {},
+                        "image/jpeg": {},
                         "image/webp": {},
+                        "image/jp2": {},
+                        "image/tiff; application=geotiff": {},
                         "application/x-binary": {},
                     },
                     "description": "Return a preview.",
@@ -211,14 +239,16 @@ class viz:
             response_class=ImageResponse,
             description="Return a preview",
         )
-        @self.app.get(
+        @self.router.get(
             r"/preview.{format}",
             responses={
                 200: {
                     "content": {
                         "image/png": {},
-                        "image/jpg": {},
+                        "image/jpeg": {},
                         "image/webp": {},
+                        "image/jp2": {},
+                        "image/tiff; application=geotiff": {},
                         "application/x-binary": {},
                     },
                     "description": "Return a preview.",
@@ -235,37 +265,72 @@ class viz:
             max_size: int = 1024,
             image_params: ImageParams = Depends(),
         ):
-            """Handle /tiles requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                kwargs = self._get_options(src_dst, indexes)
-                data = await src_dst.preview(
-                    max_size=max_size,
-                    resampling_method=image_params.resampling_method.name,
-                    **kwargs,
-                )
-                if not format:
-                    format = ImageType.jpg if data.mask.all() else ImageType.png
+            """Handle /preview requests."""
+            timings = []
+            headers: Dict[str, str] = {}
 
+            with Timer() as t:
+                async with self.reader(self.src_path) as src_dst:  # type: ignore
+                    kwargs = self._get_options(src_dst, indexes)
+                    data = await src_dst.preview(
+                        max_size=max_size,
+                        resampling_method=image_params.resampling_method.name,
+                        **kwargs,
+                    )
+                    colormap = image_params.colormap or getattr(
+                        src_dst, "colormap", None
+                    )
+            timings.append(("dataread", round(t.elapsed * 1000, 2)))
+
+            if not format:
+                format = ImageType.jpeg if data.mask.all() else ImageType.png
+
+            with Timer() as t:
                 image = data.post_process(
                     in_range=image_params.rescale_range,
                     color_formula=image_params.color_formula,
                 )
+            timings.append(("postprocess", round(t.elapsed * 1000, 2)))
 
-                colormap = image_params.colormap or getattr(src_dst, "colormap", None)
+            with Timer() as t:
                 content = image.render(
                     img_format=format.driver, colormap=colormap, **format.profile,
                 )
+            timings.append(("format", round(t.from_start * 1000, 2)))
 
-            return ImageResponse(content, media_type=MimeTypes[format.value].value)
+            headers["Server-Timing"] = ", ".join(
+                [f"{name};dur={time}" for (name, time) in timings]
+            )
+            return ImageResponse(content, media_type=format.mimetype, headers=headers)
 
-        @self.app.get(
-            r"/part/{minx},{miny},{maxx},{maxy}.{format}",
+        @self.router.get(
+            r"/part",
             responses={
                 200: {
                     "content": {
                         "image/png": {},
-                        "image/jpg": {},
+                        "image/jpeg": {},
                         "image/webp": {},
+                        "image/jp2": {},
+                        "image/tiff; application=geotiff": {},
+                        "application/x-binary": {},
+                    },
+                    "description": "Return a part of a dataset.",
+                }
+            },
+            response_class=ImageResponse,
+            description="Return a preview.",
+        )
+        @self.router.get(
+            r"/part.{format}",
+            responses={
+                200: {
+                    "content": {
+                        "image/png": {},
+                        "image/jpeg": {},
+                        "image/webp": {},
+                        "image/jp2": {},
+                        "image/tiff; application=geotiff": {},
                         "application/x-binary": {},
                     },
                     "description": "Return a part of a dataset.",
@@ -275,42 +340,56 @@ class viz:
             description="Return a preview.",
         )
         async def part(
-            minx: float = Path(..., description="Bounding box min X"),
-            miny: float = Path(..., description="Bounding box min Y"),
-            maxx: float = Path(..., description="Bounding box max X"),
-            maxy: float = Path(..., description="Bounding box max Y"),
-            format: ImageType = Query(None, description="Output image type."),
+            format: Optional[ImageType] = Query(None, description="Output image type."),
+            bbox: str = Query(
+                ..., description="Bounding box in form of 'minx,miny,maxx,maxy'"
+            ),
             indexes: Optional[str] = Query(
                 None, description="Coma (',') delimited band indexes"
             ),
             max_size: int = 1024,
             image_params: ImageParams = Depends(),
         ):
-            """Handle /tiles requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                kwargs = self._get_options(src_dst, indexes)
-                data = await src_dst.part(
-                    [minx, miny, maxx, maxy],
-                    max_size=max_size,
-                    resampling_method=image_params.resampling_method.name,
-                    **kwargs,
-                )
-                if not format:
-                    format = ImageType.jpg if data.mask.all() else ImageType.png
+            """Handle /part requests."""
+            timings = []
+            headers: Dict[str, str] = {}
 
+            with Timer() as t:
+                async with self.reader(self.src_path) as src_dst:  # type: ignore
+                    kwargs = self._get_options(src_dst, indexes)
+                    data = await src_dst.part(
+                        list(map(float, bbox.split(","))),
+                        max_size=max_size,
+                        resampling_method=image_params.resampling_method.name,
+                        **kwargs,
+                    )
+                    colormap = image_params.colormap or getattr(
+                        src_dst, "colormap", None
+                    )
+            timings.append(("dataread", round(t.elapsed * 1000, 2)))
+
+            if not format:
+                format = ImageType.jpeg if data.mask.all() else ImageType.png
+
+            with Timer() as t:
                 image = data.post_process(
                     in_range=image_params.rescale_range,
                     color_formula=image_params.color_formula,
                 )
+            timings.append(("postprocess", round(t.elapsed * 1000, 2)))
 
-                colormap = image_params.colormap or getattr(src_dst, "colormap", None)
+            with Timer() as t:
                 content = image.render(
                     img_format=format.driver, colormap=colormap, **format.profile,
                 )
+            timings.append(("format", round(t.from_start * 1000, 2)))
 
-            return ImageResponse(content, media_type=MimeTypes[format.value].value)
+            headers["Server-Timing"] = ", ".join(
+                [f"{name};dur={time}" for (name, time) in timings]
+            )
+            return ImageResponse(content, media_type=format.mimetype, headers=headers)
 
-        @self.app.get(
+        @self.router.get(
             "/point", responses={200: {"description": "Return a point value."}},
         )
         async def point(
@@ -326,7 +405,7 @@ class viz:
 
             return {"coordinates": [lon, lat], "value": results}
 
-        @self.app.get(
+        @self.router.get(
             "/metadata",
             response_model=Union[Dict[str, Metadata], Metadata],
             response_model_exclude={"minzoom", "maxzoom", "center"},
@@ -346,7 +425,7 @@ class viz:
                 kwargs = self._get_options(src_dst, indexes)
                 return await src_dst.metadata(pmin, pmax, max_size=max_size, **kwargs)
 
-        @self.app.get(
+        @self.router.get(
             "/info",
             response_model=Union[Dict[str, Info], Info],
             response_model_exclude={"minzoom", "maxzoom", "center"},
@@ -359,7 +438,7 @@ class viz:
                 kwargs = self._get_options(src_dst)
                 return await src_dst.info(**kwargs)
 
-        @self.app.get(
+        @self.router.get(
             "/tilejson.json",
             response_model=TileJSON,
             responses={200: {"description": "Return a tilejson"}},
@@ -367,7 +446,7 @@ class viz:
         )
         async def tilejson(
             request: Request,
-            tile_format: Optional[Union[ImageType, VectorType]] = None,
+            tile_format: Optional[TileType] = None,
             indexes: Optional[str] = Query(  # noqa
                 None, description="Coma (',') delimited band indexes"
             ),
@@ -405,7 +484,7 @@ class viz:
                 tiles=[tile_url],
             )
 
-        @self.app.get(
+        @self.router.get(
             "/index.html",
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
@@ -426,7 +505,7 @@ class viz:
                 media_type="text/html",
             )
 
-        @self.app.get("/WMTSCapabilities.xml", response_class=XMLResponse)
+        @self.router.get("/WMTSCapabilities.xml", response_class=XMLResponse)
         async def wmts(
             request: Request,
             tile_format: ImageType = Query(
@@ -483,8 +562,6 @@ class viz:
                 </TileMatrix>"""
                 tileMatrix.append(tm)
 
-            media_type = MimeTypes[tile_format.value].value
-
             return templates.TemplateResponse(
                 "wmts.xml",
                 {
@@ -494,7 +571,7 @@ class viz:
                     "tileMatrix": tileMatrix,
                     "title": "Cloud Optimized GeoTIFF",
                     "layer_name": "cogeo",
-                    "media_type": media_type,
+                    "media_type": tile_format.mimetype,
                 },
                 media_type="application/xml",
             )
