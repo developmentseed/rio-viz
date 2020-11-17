@@ -69,6 +69,26 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
+    response = client.get("/preview?rescale=1,10&color_map=cfastie")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+
+    response = client.get("/preview.png?rescale=1,10&color_map=cfastie")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+    response = client.get(
+        "/part.png?bbox=-2.00,48.5,-1,49.5&rescale=1,10&color_map=cfastie"
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+    response = client.get(
+        "/part?bbox=-2.00,48.5,-1,49.5&rescale=1,10&color_map=cfastie"
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+
     response = client.get("/info")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"

@@ -7,13 +7,13 @@ with open("README.md") as f:
 
 # Runtime requirements.
 inst_reqs = [
+    "braceexpand",
     "click",
+    "jinja2",
+    "fastapi~=0.61",
     "rio-cogeo",
     "rio-tiler>=2.0.0rc1",
-    "fastapi~=0.61",
     "uvicorn",
-    "jinja2",
-    "braceexpand",
 ]
 
 extra_reqs = {
@@ -42,7 +42,7 @@ setup(
     author=u"Vincent Sarago",
     author_email="vincent@developmentseed.org",
     url="https://github.com/developmentseed/rio-viz",
-    packages=find_packages(exclude=["ez_setup", "examples", "tests"]),
+    packages=find_packages(exclude=["tests"]),
     include_package_data=True,
     zip_safe=False,
     license="MIT",
