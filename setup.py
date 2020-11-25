@@ -12,7 +12,7 @@ inst_reqs = [
     "jinja2",
     "fastapi~=0.61",
     "rio-cogeo",
-    "rio-tiler>=2.0.0rc1",
+    "rio-tiler>=2.0.0rc3,<2.1",
     "uvicorn",
 ]
 

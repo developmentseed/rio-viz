@@ -85,3 +85,9 @@ class AsyncReader(AsyncBaseReader):
     async def preview(self, **kwargs: Any) -> Coroutine[Any, Any, ImageData]:
         """Return a preview of a Dataset."""
         return await run_in_threadpool(self.dataset.preview, **kwargs)  # type: ignore
+
+    async def feature(
+        self, shape: Dict, **kwargs: Any
+    ) -> Coroutine[Any, Any, ImageData]:
+        """Return a preview of a Dataset."""
+        return await run_in_threadpool(self.dataset.feature, **kwargs)  # type: ignore

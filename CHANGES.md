@@ -1,4 +1,8 @@
 
+## 0.4.2 (2020-11-24)
+
+* update for rio-tiler 2.0.0rc3
+
 ## 0.4.1 (2020-11-17)
 
 * add `--server-only` options and add preview/part API.
