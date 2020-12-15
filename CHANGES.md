@@ -1,4 +1,8 @@
 
+## 0.4.3 (2020-12-15)
+
+* Fix error when `rio-tiler-mvt` is not installed (https://github.com/developmentseed/rio-viz/issues/21)
+
 ## 0.4.2 (2020-11-24)
 
 * update for rio-tiler 2.0.0rc3

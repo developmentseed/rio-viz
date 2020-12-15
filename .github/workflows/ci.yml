@@ -1,10 +1,15 @@
 name: CI
 
-on: [push, pull_request_target]
+on:
+  push:
+    branches:
+    - master
+    tags:
+    - '*'
+  pull_request:
 
 jobs:
   tests:
-    if: github.event_name == 'push' || github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,7 +47,7 @@ jobs:
   publish:
     needs: [tests]
     runs-on: ubuntu-latest
-    if: contains(github.ref, 'tags')
+    if: startsWith(github.event.ref, 'refs/tags') || github.event_name == 'release'
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python

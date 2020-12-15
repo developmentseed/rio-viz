@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Type, Union
 import attr
 import rasterio
 import uvicorn
-from fastapi import APIRouter, Depends, FastAPI, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -31,11 +31,11 @@ try:
     has_mvt = True
 except ModuleNotFoundError:
     has_mvt = False
+    mvt_encoder = None
 
 
 template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
-_mvt_encoder = partial(run_in_threadpool, mvt_encoder)
 
 
 @attr.s
@@ -191,6 +191,14 @@ class viz:
             timings.append(("dataread", round(t.elapsed * 1000, 2)))
 
             if format and format in [TileType.pbf, TileType.mvt]:
+                if not mvt_encoder:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="rio-tiler-mvt not found, please do pip install rio-viz['mvt']",
+                    )
+
+                _mvt_encoder = partial(run_in_threadpool, mvt_encoder)
+
                 with Timer() as t:
                     content = await _mvt_encoder(
                         tile_data.data,
