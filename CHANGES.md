@@ -1,4 +1,9 @@
 
+
+## 0.4.3.post1 (2020-12-15)
+
+* add missing `__init__` in rio_viz.io submodule (https://github.com/developmentseed/rio-viz/pull/24)
+
 ## 0.4.3 (2020-12-15)
 
 * Fix error when `rio-tiler-mvt` is not installed (https://github.com/developmentseed/rio-viz/issues/21)
