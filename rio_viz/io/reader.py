@@ -36,14 +36,6 @@ class MultiFilesReader(MultiBandReader):
             self.minzoom = cog.minzoom
             self.maxzoom = cog.maxzoom
 
-    def __enter__(self):
-        """Support using with Context Managers."""
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Support using with Context Managers."""
-        pass
-
     def _get_band_url(self, band: str) -> str:
         """Validate band's name and return band's url."""
         if band not in self.bands:

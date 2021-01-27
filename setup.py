@@ -9,11 +9,9 @@ with open("README.md") as f:
 inst_reqs = [
     "braceexpand",
     "click",
-    "jinja2",
-    "fastapi~=0.61",
-    "rio-cogeo",
-    "rio-tiler>=2.0.0rc3,<2.1",
-    "uvicorn",
+    "fastapi[all]",
+    "rio-cogeo>=2.1,<2.2",
+    "rio-tiler>=2.0,<2.1",
 ]
 
 extra_reqs = {
@@ -25,7 +23,7 @@ extra_reqs = {
 setup(
     name="rio-viz",
     version="0.4.3.post1",
-    python_requires=">=3",
+    python_requires=">=3.6",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
     long_description=long_description,
     long_description_content_type="text/markdown",

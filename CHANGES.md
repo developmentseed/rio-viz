@@ -1,4 +1,8 @@
 
+## 0.4.4 (2021-01-27)
+
+* update requirements.
+* add Mapbox `dark` basemap as default.
 
 ## 0.4.3.post1 (2020-12-15)
 

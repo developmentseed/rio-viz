@@ -103,8 +103,8 @@ def test_viz():
     r = response.json()
     assert r["bounds"]
     assert r["center"]
-    assert r["minzoom"] == 6
-    assert r["maxzoom"] == 8
+    assert r["minzoom"] == 7
+    assert r["maxzoom"] == 9
     assert r["tiles"][0].endswith("png")
 
     response = client.get("/tilejson.json?tile_format=pbf")
