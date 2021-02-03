@@ -3,7 +3,7 @@
 import pytest
 
 from rio_tiler.profiles import img_profiles
-from rio_viz.ressources.enums import ImageType, TileType
+from rio_viz.resources.enums import ImageType, TileType
 
 
 @pytest.mark.parametrize(

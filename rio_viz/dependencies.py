@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from fastapi import Query
 
-from .ressources.enums import ColorMaps, ResamplingNames
+from .resources.enums import ColorMaps, ResamplingNames
 
 
 @dataclass
