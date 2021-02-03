@@ -21,8 +21,8 @@ from rio_tiler.models import Info, Metadata
 
 from .dependencies import ImageParams
 from .models.mapbox import TileJSON
-from .ressources.enums import ImageType, TileType
-from .ressources.responses import ImageResponse, XMLResponse
+from .resources.enums import ImageType, TileType
+from .resources.responses import ImageResponse, XMLResponse
 from .utils import Timer
 
 try:

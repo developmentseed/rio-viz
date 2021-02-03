@@ -1,4 +1,8 @@
 
+## next (tbd)
+
+* renamed `rio_viz.ressources` to `rio_viz.resources` (https://github.com/developmentseed/titiler/pull/210)
+
 ## 0.4.4 (2021-01-27)
 
 * update requirements.
