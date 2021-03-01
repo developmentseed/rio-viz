@@ -1,7 +1,10 @@
 
-## next (tbd)
+## 0.5.0 (2021-03-01)
 
 * renamed `rio_viz.ressources` to `rio_viz.resources` (https://github.com/developmentseed/titiler/pull/210)
+* update and reduce requirements
+* fix wrong tilesize setting in UI
+* update pre-commit configuration
 
 ## 0.4.4 (2021-01-27)
 

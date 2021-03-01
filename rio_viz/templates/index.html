@@ -414,7 +414,7 @@
           const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
           let url = `${tilejson_endpoint}?${url_params}`
 
-          map.addSource('raster', { type: 'raster', url: url , tileSize: 512})
+          map.addSource('raster', { type: 'raster', url: url , tileSize: 256})
           addLayer(vizType)
           break
 
@@ -461,7 +461,7 @@
       const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
       let url = `${tilejson_endpoint}?${url_params}`
 
-      map.addSource('raster', { type: 'raster', url: url, tileSize: 512})
+      map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
       map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
       addHisto3Bands()
     }
