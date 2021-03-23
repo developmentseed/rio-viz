@@ -511,9 +511,10 @@ class viz:
             tile_url = request.url_for("tile", **kwargs)
 
             qs = str(request.query_params)
+            if "tile_format" in qs:
+                qs = qs.replace(f"tile_format={tile_format.value}", "")
+
             if qs:
-                if "tile_format" in qs:
-                    qs = qs.replace(f"tile_format={tile_format.value}", "")
                 tile_url += f"?{qs}"
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
