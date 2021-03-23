@@ -19,7 +19,13 @@ from starlette.templating import Jinja2Templates
 from rio_tiler.io import AsyncBaseReader
 from rio_tiler.models import Info, Metadata
 
-from .dependencies import ImageParams
+from .dependencies import (
+    AssetsParams,
+    BandsParams,
+    DefaultDependency,
+    ImageParams,
+    IndexesParams,
+)
 from .models.mapbox import TileJSON
 from .resources.enums import ImageType, TileType
 from .resources.responses import ImageResponse, XMLResponse
@@ -59,11 +65,37 @@ class viz:
     layers: Optional[str] = attr.ib(default=None)
     nodata: Optional[Union[str, int, float]] = attr.ib(default=None)
 
+    # cog / bands / assets
+    reader_type: str = attr.ib(default="cog")
+
     router: Optional[APIRouter] = attr.ib(init=False)
+
+    layer_dependency: Type[DefaultDependency] = attr.ib(init=False)
+
+    @reader_type.validator
+    def check(self, attribute, value):
+        """Validate reader_type."""
+        if value not in ["cog", "bands", "assets"]:
+            raise ValueError("`reader_type` must be one of `cog, bands or assets`")
 
     def __attrs_post_init__(self):
         """Update App."""
         self.router = APIRouter()
+
+        if self.reader_type == "cog":
+            self.layer_dependency = IndexesParams
+        elif self.reader_type == "bands":
+            self.layer_dependency = type(
+                "BandsParams",
+                (BandsParams,),
+                {"default_band": self.layers.split(",") if self.layers else None},
+            )
+        elif self.reader_type == "assets":
+            self.layer_dependency = type(
+                "AssetsParams",
+                (AssetsParams,),
+                {"default_asset": self.layers.split(",") if self.layers else None},
+            )
 
         self.register_middleware()
         self.register_routes()
@@ -80,30 +112,17 @@ class viz:
         )
         self.app.add_middleware(GZipMiddleware, minimum_size=0)
 
-    def _get_options(self, src_dst, indexes: Optional[str] = None):
+    def _get_options(self, src_dst, options: Dict[str, Any]):
         """Create Reader options."""
-        kwargs: Dict[str, Any] = {}
-
         assets = getattr(src_dst, "assets", None)
+        if assets and not options.get("assets"):
+            options["assets"] = assets
+
         bands = getattr(src_dst, "bands", None)
+        if bands and not options.get("bands"):
+            options["bands"] = bands
 
-        if indexes:
-            if assets:
-                kwargs["assets"] = indexes.split(",")
-            elif bands:
-                kwargs["bands"] = indexes.split(",")
-            else:
-                kwargs["indexes"] = tuple(int(s) for s in indexes.split(","))
-        else:
-            if assets:
-                kwargs["assets"] = self.layers.split(",") if self.layers else assets
-            if bands:
-                kwargs["bands"] = self.layers.split(",") if self.layers else bands
-
-        if self.nodata is not None:
-            kwargs["nodata"] = self.nodata
-
-        return kwargs
+        return options
 
     def register_routes(self):
         """Register routes to the FastAPI app."""
@@ -152,9 +171,7 @@ class viz:
             y: int,
             scale: int = Query(2, gt=0, lt=4),
             format: Optional[TileType] = None,
-            indexes: Optional[str] = Query(
-                None, description="Coma (',') delimited band indexes"
-            ),
+            layer_params=Depends(self.layer_dependency),
             image_params: ImageParams = Depends(),
             feature_type: str = Query(
                 None,
@@ -173,7 +190,12 @@ class viz:
 
             with Timer() as t:
                 async with self.reader(self.src_path) as src_dst:  # type: ignore
-                    kwargs = self._get_options(src_dst, indexes)
+
+                    # Adapt options for each reader type
+                    kwargs = self._get_options(src_dst, layer_params.kwargs)
+                    if self.nodata is not None:
+                        kwargs["nodata"] = self.nodata
+
                     tile_data = await src_dst.tile(
                         x,
                         y,
@@ -182,12 +204,12 @@ class viz:
                         resampling_method=image_params.resampling_method.name,
                         **kwargs,
                     )
-                    colormap = image_params.colormap or getattr(
-                        src_dst, "colormap", None
-                    )
-                    bands = kwargs.get("bands", kwargs.get("assets", None)) or [
+
+                    bandnames = kwargs.get("bands", kwargs.get("assets", None)) or [
                         f"{ix + 1}" for ix in range(tile_data.count)
                     ]
+
+                    dst_colormap = getattr(src_dst, "colormap", None)
             timings.append(("dataread", round(t.elapsed * 1000, 2)))
 
             if format and format in [TileType.pbf, TileType.mvt]:
@@ -203,7 +225,7 @@ class viz:
                     content = await _mvt_encoder(
                         tile_data.data,
                         tile_data.mask,
-                        bands,
+                        bandnames,
                         feature_type=feature_type,
                     )  # type: ignore
                 timings.append(("format", round(t.elapsed * 1000, 2)))
@@ -220,7 +242,9 @@ class viz:
 
                 with Timer() as t:
                     content = image.render(
-                        img_format=format.driver, colormap=colormap, **format.profile,
+                        img_format=format.driver,
+                        colormap=image_params.colormap or dst_colormap,
+                        **format.profile,
                     )
                 timings.append(("format", round(t.from_start * 1000, 2)))
 
@@ -271,6 +295,7 @@ class viz:
                 None, description="Coma (',') delimited band indexes"
             ),
             max_size: int = 1024,
+            layer_params=Depends(self.layer_dependency),
             image_params: ImageParams = Depends(),
         ):
             """Handle /preview requests."""
@@ -279,15 +304,18 @@ class viz:
 
             with Timer() as t:
                 async with self.reader(self.src_path) as src_dst:  # type: ignore
-                    kwargs = self._get_options(src_dst, indexes)
+
+                    # Adapt options for each reader type
+                    kwargs = self._get_options(src_dst, layer_params.kwargs)
+                    if self.nodata is not None:
+                        kwargs["nodata"] = self.nodata
+
                     data = await src_dst.preview(
                         max_size=max_size,
                         resampling_method=image_params.resampling_method.name,
                         **kwargs,
                     )
-                    colormap = image_params.colormap or getattr(
-                        src_dst, "colormap", None
-                    )
+                    dst_colormap = getattr(src_dst, "colormap", None)
             timings.append(("dataread", round(t.elapsed * 1000, 2)))
 
             if not format:
@@ -302,7 +330,9 @@ class viz:
 
             with Timer() as t:
                 content = image.render(
-                    img_format=format.driver, colormap=colormap, **format.profile,
+                    img_format=format.driver,
+                    colormap=image_params.colormap or dst_colormap,
+                    **format.profile,
                 )
             timings.append(("format", round(t.from_start * 1000, 2)))
 
@@ -356,6 +386,7 @@ class viz:
                 None, description="Coma (',') delimited band indexes"
             ),
             max_size: int = 1024,
+            layer_params=Depends(self.layer_dependency),
             image_params: ImageParams = Depends(),
         ):
             """Handle /part requests."""
@@ -364,16 +395,19 @@ class viz:
 
             with Timer() as t:
                 async with self.reader(self.src_path) as src_dst:  # type: ignore
-                    kwargs = self._get_options(src_dst, indexes)
+
+                    # Adapt options for each reader type
+                    kwargs = self._get_options(src_dst, layer_params.kwargs)
+                    if self.nodata is not None:
+                        kwargs["nodata"] = self.nodata
+
                     data = await src_dst.part(
                         list(map(float, bbox.split(","))),
                         max_size=max_size,
                         resampling_method=image_params.resampling_method.name,
                         **kwargs,
                     )
-                    colormap = image_params.colormap or getattr(
-                        src_dst, "colormap", None
-                    )
+                    dst_colormap = getattr(src_dst, "colormap", None)
             timings.append(("dataread", round(t.elapsed * 1000, 2)))
 
             if not format:
@@ -388,7 +422,9 @@ class viz:
 
             with Timer() as t:
                 content = image.render(
-                    img_format=format.driver, colormap=colormap, **format.profile,
+                    img_format=format.driver,
+                    colormap=image_params.colormap or dst_colormap,
+                    **format.profile,
                 )
             timings.append(("format", round(t.from_start * 1000, 2)))
 
@@ -404,11 +440,15 @@ class viz:
             coordinates: str = Query(
                 ..., description="Coma (',') delimited lon,lat coordinates"
             ),
+            layer_params=Depends(self.layer_dependency),
         ):
             """Handle /point requests."""
             lon, lat = list(map(float, coordinates.split(",")))
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                kwargs = self._get_options(src_dst)
+                kwargs = self._get_options(src_dst, layer_params.kwargs)
+                if self.nodata is not None:
+                    kwargs["nodata"] = self.nodata
+
                 results = await src_dst.point(lon, lat, **kwargs)
 
             return {"coordinates": [lon, lat], "value": results}
@@ -424,13 +464,15 @@ class viz:
             pmin: float = 2.0,
             pmax: float = 98.0,
             max_size: int = 1024,
-            indexes: Optional[str] = Query(
-                None, title="Coma (',') delimited band indexes"
-            ),
+            layer_params=Depends(self.layer_dependency),
         ):
             """Handle /metadata requests."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                kwargs = self._get_options(src_dst, indexes)
+                # Adapt options for each reader type
+                kwargs = self._get_options(src_dst, layer_params.kwargs)
+                if self.nodata is not None:
+                    kwargs["nodata"] = self.nodata
+
                 return await src_dst.metadata(pmin, pmax, max_size=max_size, **kwargs)
 
         @self.router.get(
@@ -440,10 +482,11 @@ class viz:
             response_model_exclude_none=True,
             responses={200: {"description": "Return the metadata of the COG."}},
         )
-        async def info():
+        async def info(layer_params=Depends(self.layer_dependency)):
             """Handle /info requests."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                kwargs = self._get_options(src_dst)
+                # Adapt options for each reader type
+                kwargs = self._get_options(src_dst, layer_params.kwargs)
                 return await src_dst.info(**kwargs)
 
         @self.router.get(
@@ -455,9 +498,7 @@ class viz:
         async def tilejson(
             request: Request,
             tile_format: Optional[TileType] = None,
-            indexes: Optional[str] = Query(  # noqa
-                None, description="Coma (',') delimited band indexes"
-            ),
+            layer_params=Depends(self.layer_dependency),  # noqa
             image_params: ImageParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
@@ -470,11 +511,13 @@ class viz:
 
             tile_url = request.url_for("tile", **kwargs)
 
-            kwargs = dict(request.query_params)
-            kwargs.pop("tile_format", None)
-            qs = urllib.parse.urlencode(list(kwargs.items()))
+            qs = [
+                (key, value)
+                for (key, value) in request.query_params._list
+                if key != "tile_format"
+            ]
             if qs:
-                tile_url += f"?{qs}"
+                tile_url += f"?{urllib.parse.urlencode(qs)}"
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
                 bounds = src_dst.bounds
@@ -499,8 +542,15 @@ class viz:
         )
         async def viewer(request: Request):
             """Handle /index.html."""
+            if self.reader_type == "cog":
+                name = "index.html"
+            elif self.reader_type == "bands":
+                name = "bands.html"
+            elif self.reader_type == "assets":
+                name = "assets.html"
+
             return templates.TemplateResponse(
-                name="index.html",
+                name=name,
                 context={
                     "request": request,
                     "tilejson_endpoint": request.url_for("tilejson"),
@@ -519,9 +569,7 @@ class viz:
             tile_format: ImageType = Query(
                 ImageType.png, description="Output image type. Default is png."
             ),
-            indexes: Optional[str] = Query(  # noqa
-                None, description="Coma (',') delimited band indexes"
-            ),
+            layer_params=Depends(self.layer_dependency),  # noqa
             image_params: ImageParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"

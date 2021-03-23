@@ -12,7 +12,13 @@ from rasterio.rio import options
 from rio_cogeo.cogeo import cog_translate, cog_validate
 from rio_cogeo.profiles import cog_profiles
 
-from rio_tiler.io import AsyncBaseReader, BaseReader, COGReader
+from rio_tiler.io import (
+    AsyncBaseReader,
+    BaseReader,
+    COGReader,
+    MultiBandReader,
+    MultiBaseReader,
+)
 from rio_viz import app
 from rio_viz.compat import AsyncReader
 
@@ -110,7 +116,9 @@ class NodataParamType(click.ParamType):
     help="rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`",
 )
 @click.option(
-    "--layers", type=str, help="limit to specific layers (indexes, bands, assets)"
+    "--layers",
+    type=str,
+    help="limit to specific layers (only used for MultiBand and MultiBase Readers).",
 )
 @click.option(
     "--server-only",
@@ -151,6 +159,13 @@ def viz(
 
     dataset_reader = reader or COGReader
 
+    if issubclass(dataset_reader, (MultiBandReader)):
+        reader_type = "bands"
+    elif issubclass(dataset_reader, (MultiBaseReader)):
+        reader_type = "assets"
+    else:
+        reader_type = "cog"
+
     # Check if cog
     with ExitStack() as ctx:
         if (
@@ -187,6 +202,7 @@ def viz(
             maxzoom=maxzoom,
             nodata=nodata,
             layers=layers,
+            reader_type=reader_type,
         )
         if not server_only:
             click.echo(f"Viewer started at {application.template_url}", err=True)

@@ -1,4 +1,19 @@
 
+## 0.6.0 (2021-03-23)
+
+* add dynamic dependency injection to better support multiple reader types (https://github.com/developmentseed/rio-viz/pull/28)
+* add better UI for MultiBaseReader (e.g STAC)
+* renamed `indexes` query parameter to `bidx`
+* update bands/assets/indexes query parameter style to follow the common specification
+
+```
+# before
+/tiles/9/150/189?indexes=1,2,3
+
+# now
+/tiles/9/150/189?bidx=1&bidx=2&bidx=3
+```
+
 ## 0.5.0 (2021-03-01)
 
 * renamed `rio_viz.ressources` to `rio_viz.resources` (https://github.com/developmentseed/titiler/pull/210)

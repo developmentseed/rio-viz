@@ -400,12 +400,12 @@
       switch (vizType) {
         case 'raster':
           const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-          indexes = active_layer.getAttribute('band')
-          params.bidx = indexes
+          band = active_layer.getAttribute('band')
+          params.band = band
 
           if (document.getElementById('histcut-selector').querySelector("input[name='toggle-histo']:checked").value !== 'none') {
-            const minV = scope.config[indexes].min
-            const maxV = scope.config[indexes].max
+            const minV = scope.config[band].min
+            const maxV = scope.config[band].max
             params.rescale =  `${minV},${maxV}`
           }
           const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
@@ -458,8 +458,8 @@
         params.rescale =  `${min1},${max1},${min2},${max2},${min3},${max3}`
       }
       const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-      const indexes_params = [r, g, b].map(i => `bidx=${i}`).join('&')
-      let url = `${tilejson_endpoint}?${url_params}&${indexes_params}`
+      const bands_params = [r, g, b].map(i => `band=${i}`).join('&')
+      let url = `${tilejson_endpoint}?${url_params}&${bands_params}`
 
       map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
       map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
@@ -491,10 +491,10 @@
       if (map.getLayer('mvt')) map.removeLayer('mvt')
 
       const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const indexes = active_layer.getAttribute('band')
+      const band = active_layer.getAttribute('band')
 
-      let sMin = scope.config[indexes].min
-      const sMax = scope.config[indexes].max
+      let sMin = scope.config[band].min
+      const sMax = scope.config[band].max
       if (sMin === sMax) sMin = sMin - 0.00001
 
       addHisto1Band()
