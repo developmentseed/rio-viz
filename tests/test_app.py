@@ -38,12 +38,12 @@ def test_viz():
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/tiles/7/64/43.png?rescale=1,10&indexes=1&color_formula=Gamma R 3"
+        "/tiles/7/64/43.png?rescale=1,10&bidx=1&color_formula=Gamma R 3"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43.png?rescale=1,10&indexes=1,1,1")
+    response = client.get("/tiles/7/64/43.png?rescale=1,10&bidx=1&bidx=1&bidx=1")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
