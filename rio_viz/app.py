@@ -204,6 +204,11 @@ class viz:
                         resampling_method=image_params.resampling_method.name,
                         **kwargs,
                     )
+
+                    bandnames = kwargs.get("bands", kwargs.get("assets", None)) or [
+                        f"{ix + 1}" for ix in range(tile_data.count)
+                    ]
+
                     dst_colormap = getattr(src_dst, "colormap", None)
             timings.append(("dataread", round(t.elapsed * 1000, 2)))
 
@@ -215,10 +220,6 @@ class viz:
                     )
 
                 _mvt_encoder = partial(run_in_threadpool, mvt_encoder)
-
-                bandnames = layer_params.kwargs.get(
-                    "bands", layer_params.kwargs.get("assets", None)
-                ) or [f"{ix + 1}" for ix in range(tile_data.count)]
 
                 with Timer() as t:
                     content = await _mvt_encoder(
