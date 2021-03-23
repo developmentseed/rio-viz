@@ -510,12 +510,13 @@ class viz:
 
             tile_url = request.url_for("tile", **kwargs)
 
-            qs = str(request.query_params)
-            if "tile_format" in qs:
-                qs = qs.replace(f"tile_format={tile_format.value}", "")
-
+            qs = [
+                (key, value)
+                for (key, value) in request.query_params._list
+                if key != "tile_format"
+            ]
             if qs:
-                tile_url += f"?{qs}"
+                tile_url += f"?{urllib.parse.urlencode(qs)}"
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
                 bounds = src_dst.bounds
