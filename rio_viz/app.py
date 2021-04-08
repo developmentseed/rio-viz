@@ -10,11 +10,13 @@ import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, Response
 from starlette.templating import Jinja2Templates
+from starlette.types import ASGIApp
 
 from rio_tiler.io import AsyncBaseReader
 from rio_tiler.models import Info, Metadata
@@ -28,20 +30,40 @@ from .dependencies import (
 )
 from .models.mapbox import TileJSON
 from .resources.enums import ImageType, TileType
-from .resources.responses import ImageResponse, XMLResponse
+from .resources.responses import XMLResponse
 from .utils import Timer
 
 try:
-    from rio_tiler_mvt.mvt import encoder as mvt_encoder  # noqa
+    from rio_tiler_mvt import pixels_encoder  # noqa
 
     has_mvt = True
 except ModuleNotFoundError:
     has_mvt = False
-    mvt_encoder = None
-
+    pixels_encoder = None
 
 template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
+
+
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    """MiddleWare to add CacheControl in response headers."""
+
+    def __init__(self, app: ASGIApp, cachecontrol: str = "no-cache") -> None:
+        """Init Middleware."""
+        super().__init__(app)
+        self.cachecontrol = cachecontrol
+
+    async def dispatch(self, request: Request, call_next):
+        """Add cache-control."""
+        response = await call_next(request)
+        if (
+            not response.headers.get("Cache-Control")
+            and self.cachecontrol
+            and request.method in ["HEAD", "GET"]
+            and response.status_code < 500
+        ):
+            response.headers["Cache-Control"] = self.cachecontrol
+        return response
 
 
 @attr.s
@@ -111,6 +133,7 @@ class viz:
             allow_headers=["*"],
         )
         self.app.add_middleware(GZipMiddleware, minimum_size=0)
+        self.app.add_middleware(CacheControlMiddleware)
 
     def _get_options(self, src_dst, options: Dict[str, Any]):
         """Create Reader options."""
@@ -126,169 +149,29 @@ class viz:
 
     def register_routes(self):
         """Register routes to the FastAPI app."""
+        img_media_types = {
+            "image/png": {},
+            "image/jpeg": {},
+            "image/webp": {},
+            "image/jp2": {},
+            "image/tiff; application=geotiff": {},
+            "application/x-binary": {},
+        }
+        mvt_media_type = {
+            "application/x-binary": {},
+            "application/x-protobuf": {},
+        }
 
-        @self.router.get(
-            r"/tiles/{z}/{x}/{y}",
+        preview_params = dict(
             responses={
-                200: {
-                    "content": {
-                        "image/png": {},
-                        "image/jpeg": {},
-                        "image/webp": {},
-                        "image/jp2": {},
-                        "image/tiff; application=geotiff": {},
-                        "application/x-binary": {},
-                        "application/x-protobuf": {},
-                    },
-                    "description": "Return a tile.",
-                }
+                200: {"content": img_media_types, "description": "Return a preview."}
             },
-            response_class=ImageResponse,
-            description="Read COG and return a tile",
-        )
-        @self.router.get(
-            r"/tiles/{z}/{x}/{y}.{format}",
-            responses={
-                200: {
-                    "content": {
-                        "image/png": {},
-                        "image/jpeg": {},
-                        "image/webp": {},
-                        "image/jp2": {},
-                        "image/tiff; application=geotiff": {},
-                        "application/x-binary": {},
-                        "application/x-protobuf": {},
-                    },
-                    "description": "Return an image.",
-                }
-            },
-            response_class=ImageResponse,
-            description="Read COG and return a tile",
-        )
-        async def tile(
-            z: int,
-            x: int,
-            y: int,
-            scale: int = Query(2, gt=0, lt=4),
-            format: Optional[TileType] = None,
-            layer_params=Depends(self.layer_dependency),
-            image_params: ImageParams = Depends(),
-            feature_type: str = Query(
-                None,
-                title="Feature type (Only for Vector)",
-                regex="^(point)|(polygon)$",
-            ),
-        ):
-            """Handle /tiles requests."""
-            timings = []
-            headers: Dict[str, str] = {}
-
-            tilesize = scale * 256
-
-            if format and format in [TileType.pbf, TileType.mvt]:
-                tilesize = 128
-
-            with Timer() as t:
-                async with self.reader(self.src_path) as src_dst:  # type: ignore
-
-                    # Adapt options for each reader type
-                    kwargs = self._get_options(src_dst, layer_params.kwargs)
-                    if self.nodata is not None:
-                        kwargs["nodata"] = self.nodata
-
-                    tile_data = await src_dst.tile(
-                        x,
-                        y,
-                        z,
-                        tilesize=tilesize,
-                        resampling_method=image_params.resampling_method.name,
-                        **kwargs,
-                    )
-
-                    bandnames = kwargs.get("bands", kwargs.get("assets", None)) or [
-                        f"{ix + 1}" for ix in range(tile_data.count)
-                    ]
-
-                    dst_colormap = getattr(src_dst, "colormap", None)
-            timings.append(("dataread", round(t.elapsed * 1000, 2)))
-
-            if format and format in [TileType.pbf, TileType.mvt]:
-                if not mvt_encoder:
-                    raise HTTPException(
-                        status_code=500,
-                        detail="rio-tiler-mvt not found, please do pip install rio-viz['mvt']",
-                    )
-
-                _mvt_encoder = partial(run_in_threadpool, mvt_encoder)
-
-                with Timer() as t:
-                    content = await _mvt_encoder(
-                        tile_data.data,
-                        tile_data.mask,
-                        bandnames,
-                        feature_type=feature_type,
-                    )  # type: ignore
-                timings.append(("format", round(t.elapsed * 1000, 2)))
-            else:
-                if not format:
-                    format = TileType.jpeg if tile_data.mask.all() else TileType.png
-
-                with Timer() as t:
-                    image = tile_data.post_process(
-                        in_range=image_params.rescale_range,
-                        color_formula=image_params.color_formula,
-                    )
-                timings.append(("postprocess", round(t.elapsed * 1000, 2)))
-
-                with Timer() as t:
-                    content = image.render(
-                        img_format=format.driver,
-                        colormap=image_params.colormap or dst_colormap,
-                        **format.profile,
-                    )
-                timings.append(("format", round(t.from_start * 1000, 2)))
-
-            headers["Server-Timing"] = ", ".join(
-                [f"{name};dur={time}" for (name, time) in timings]
-            )
-            return ImageResponse(content, media_type=format.mimetype, headers=headers)
-
-        @self.router.get(
-            r"/preview",
-            responses={
-                200: {
-                    "content": {
-                        "image/png": {},
-                        "image/jpeg": {},
-                        "image/webp": {},
-                        "image/jp2": {},
-                        "image/tiff; application=geotiff": {},
-                        "application/x-binary": {},
-                    },
-                    "description": "Return a preview.",
-                }
-            },
-            response_class=ImageResponse,
-            description="Return a preview",
-        )
-        @self.router.get(
-            r"/preview.{format}",
-            responses={
-                200: {
-                    "content": {
-                        "image/png": {},
-                        "image/jpeg": {},
-                        "image/webp": {},
-                        "image/jp2": {},
-                        "image/tiff; application=geotiff": {},
-                        "application/x-binary": {},
-                    },
-                    "description": "Return a preview.",
-                }
-            },
-            response_class=ImageResponse,
+            response_class=Response,
             description="Return a preview.",
         )
+
+        @self.router.get(r"/preview", **preview_params)
+        @self.router.get(r"/preview.{format}", **preview_params)
         async def preview(
             format: Optional[ImageType] = None,
             indexes: Optional[str] = Query(
@@ -339,44 +222,21 @@ class viz:
             headers["Server-Timing"] = ", ".join(
                 [f"{name};dur={time}" for (name, time) in timings]
             )
-            return ImageResponse(content, media_type=format.mimetype, headers=headers)
+            return Response(content, media_type=format.mimetype, headers=headers)
 
-        @self.router.get(
-            r"/part",
+        part_params = dict(
             responses={
                 200: {
-                    "content": {
-                        "image/png": {},
-                        "image/jpeg": {},
-                        "image/webp": {},
-                        "image/jp2": {},
-                        "image/tiff; application=geotiff": {},
-                        "application/x-binary": {},
-                    },
+                    "content": img_media_types,
                     "description": "Return a part of a dataset.",
                 }
             },
-            response_class=ImageResponse,
-            description="Return a preview.",
+            response_class=Response,
+            description="Return a part of a dataset.",
         )
-        @self.router.get(
-            r"/part.{format}",
-            responses={
-                200: {
-                    "content": {
-                        "image/png": {},
-                        "image/jpeg": {},
-                        "image/webp": {},
-                        "image/jp2": {},
-                        "image/tiff; application=geotiff": {},
-                        "application/x-binary": {},
-                    },
-                    "description": "Return a part of a dataset.",
-                }
-            },
-            response_class=ImageResponse,
-            description="Return a preview.",
-        )
+
+        @self.router.get(r"/part", **part_params)
+        @self.router.get(r"/part.{format}", **part_params)
         async def part(
             format: Optional[ImageType] = Query(None, description="Output image type."),
             bbox: str = Query(
@@ -431,7 +291,7 @@ class viz:
             headers["Server-Timing"] = ", ".join(
                 [f"{name};dur={time}" for (name, time) in timings]
             )
-            return ImageResponse(content, media_type=format.mimetype, headers=headers)
+            return Response(content, media_type=format.mimetype, headers=headers)
 
         @self.router.get(
             "/point", responses={200: {"description": "Return a point value."}},
@@ -488,6 +348,113 @@ class viz:
                 # Adapt options for each reader type
                 kwargs = self._get_options(src_dst, layer_params.kwargs)
                 return await src_dst.info(**kwargs)
+
+        tile_params = dict(
+            responses={
+                200: {
+                    "content": {**img_media_types, **mvt_media_type},
+                    "description": "Return a tile.",
+                }
+            },
+            response_class=Response,
+            description="Read COG and return a tile",
+        )
+
+        @self.router.get(r"/tiles/{z}/{x}/{y}", **tile_params)
+        @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **tile_params)
+        async def tile(
+            z: int,
+            x: int,
+            y: int,
+            scale: int = Query(2, gt=0, lt=4),
+            format: Optional[TileType] = None,
+            layer_params=Depends(self.layer_dependency),
+            image_params: ImageParams = Depends(),
+            feature_type: str = Query(
+                None,
+                title="Feature type (Only for Vector)",
+                regex="^(point)|(polygon)$",
+            ),
+        ):
+            """Handle /tiles requests."""
+            timings = []
+            headers: Dict[str, str] = {}
+
+            tilesize = scale * 256
+
+            if format and format in [TileType.pbf, TileType.mvt]:
+                tilesize = (
+                    tilesize if feature_type and feature_type == "feature" else 128
+                )
+
+            with Timer() as t:
+                async with self.reader(self.src_path) as src_dst:  # type: ignore
+
+                    # Adapt options for each reader type
+                    kwargs = self._get_options(src_dst, layer_params.kwargs)
+                    if self.nodata is not None:
+                        kwargs["nodata"] = self.nodata
+
+                    tile_data = await src_dst.tile(
+                        x,
+                        y,
+                        z,
+                        tilesize=tilesize,
+                        resampling_method=image_params.resampling_method.name,
+                        **kwargs,
+                    )
+
+                    bandnames = kwargs.get("bands", kwargs.get("assets", None)) or [
+                        f"{ix + 1}" for ix in range(tile_data.count)
+                    ]
+
+                    dst_colormap = getattr(src_dst, "colormap", None)
+            timings.append(("dataread", round(t.elapsed * 1000, 2)))
+
+            if format and format in [TileType.pbf, TileType.mvt]:
+                if not pixels_encoder:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="rio-tiler-mvt not found, please do pip install rio-viz['mvt']",
+                    )
+
+                if not feature_type:
+                    raise HTTPException(
+                        status_code=500, detail="missing feature_type for vector tile.",
+                    )
+                _mvt_encoder = partial(run_in_threadpool, pixels_encoder)
+                with Timer() as t:
+                    content = await _mvt_encoder(
+                        tile_data.data,
+                        tile_data.mask,
+                        bandnames,
+                        feature_type=feature_type,
+                    )  # type: ignore
+                timings.append(("format", round(t.elapsed * 1000, 2)))
+
+            else:
+                if not format:
+                    format = TileType.jpeg if tile_data.mask.all() else TileType.png
+
+                with Timer() as t:
+                    image = tile_data.post_process(
+                        in_range=image_params.rescale_range,
+                        color_formula=image_params.color_formula,
+                    )
+                timings.append(("postprocess", round(t.elapsed * 1000, 2)))
+
+                with Timer() as t:
+                    content = image.render(
+                        img_format=format.driver,
+                        colormap=image_params.colormap or dst_colormap,
+                        **format.profile,
+                    )
+                timings.append(("format", round(t.from_start * 1000, 2)))
+
+            headers["Server-Timing"] = ", ".join(
+                [f"{name};dur={time}" for (name, time) in timings]
+            )
+            return Response(content, media_type=format.mimetype, headers=headers)
 
         @self.router.get(
             "/tilejson.json",

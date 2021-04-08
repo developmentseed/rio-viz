@@ -1,4 +1,9 @@
 
+## 0.6.1 (2021-04-08)
+
+* update rio-tiler-mvt
+* use cache middleware to add `cache-control` headers.
+
 ## 0.6.0 (2021-03-23)
 
 * add dynamic dependency injection to better support multiple reader types (https://github.com/developmentseed/rio-viz/pull/28)
