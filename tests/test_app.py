@@ -32,10 +32,12 @@ def test_viz():
 
     response = client.get("/index.html")
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
 
     response = client.get("/tiles/7/64/43.png?rescale=1,10")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "no-cache"
 
     response = client.get(
         "/tiles/7/64/43.png?rescale=1,10&bidx=1&color_formula=Gamma R 3"
@@ -62,16 +64,21 @@ def test_viz():
         client.get("/tiles/18/8624/119094.pbf")
 
     response = client.get("/tiles/7/64/43.pbf")
+    assert response.status_code == 500
+    assert not response.headers.get("cache-control")
+
+    response = client.get("/tiles/7/64/43.pbf?feature_type=polygon")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
-    response = client.get("/tiles/7/64/43.pbf?feature_type=polygon")
+    response = client.get("/tiles/7/64/43.pbf?feature_type=point")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
     response = client.get("/preview?rescale=1,10&color_map=cfastie")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["cache-control"] == "no-cache"
 
     response = client.get("/preview.png?rescale=1,10&color_map=cfastie")
     assert response.status_code == 200

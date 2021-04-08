@@ -22,7 +22,7 @@ inst_reqs = [
 ]
 
 extra_reqs = {
-    "mvt": ["rio-tiler-mvt"],
+    "mvt": ["rio-tiler-mvt==0.0.1.dev2"],
     "test": ["pytest", "pytest-cov", "pytest-asyncio", "requests"],
     "dev": ["pytest", "pytest-cov", "pytest-asyncio", "pre-commit"],
 }
