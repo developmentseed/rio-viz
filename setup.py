@@ -9,7 +9,7 @@ with open("README.md") as f:
 inst_reqs = [
     "braceexpand",
     "click",
-    "fastapi==0.63.0",
+    "fastapi==0.65.2",
     "jinja2 >=2.11.2,<3.0.0",
     "rasterio",
     "rio-cogeo>=2.1,<2.2",
