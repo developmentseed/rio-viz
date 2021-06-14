@@ -1,4 +1,9 @@
 
+## 0.7.0 (TBD)
+
+* add `titiler.core` as dependencies to reduce code duplication.
+* update code and templates to follow `titiler.core` specs.
+
 ## 0.6.1 (2021-04-08)
 
 * update rio-tiler-mvt

@@ -1,36 +1,36 @@
-"""Titiler Enums."""
+"""rio-viz Enums."""
 
 from enum import Enum
 from types import DynamicClassAttribute
 
-from rasterio.enums import Resampling
-
-from rio_tiler.colormap import cmap
 from rio_tiler.profiles import img_profiles
 
 
-class MimeTypes(str, Enum):
-    """MineTypes."""
+class MediaType(str, Enum):
+    """Responses Media types formerly known as MIME types."""
 
     tif = "image/tiff; application=geotiff"
     jp2 = "image/jp2"
     png = "image/png"
     pngraw = "image/png"
     jpeg = "image/jpeg"
+    jpg = "image/jpg"
     webp = "image/webp"
     npy = "application/x-binary"
-    pbf = "application/x-protobuf"
-    mvt = "application/x-protobuf"
     xml = "application/xml"
     json = "application/json"
+    geojson = "application/geo+json"
     html = "text/html"
     text = "text/plain"
+    pbf = "application/x-protobuf"
+    mvt = "application/x-protobuf"
 
 
-class ImageDrivers(str, Enum):
-    """Rio-tiler supported output drivers."""
+class ImageDriver(str, Enum):
+    """Supported output GDAL drivers."""
 
     jpeg = "JPEG"
+    jpg = "JPEG"
     png = "PNG"
     pngraw = "PNG"
     tif = "GTiff"
@@ -39,45 +39,8 @@ class ImageDrivers(str, Enum):
     npy = "NPY"
 
 
-class ImageType(Enum):
-    """Available Output Image type."""
-
-    png = "png"
-    npy = "npy"
-    tif = "tif"
-    jpeg = "jpg"
-    jp2 = "jp2"
-    webp = "webp"
-    pngraw = "pngraw"
-
-    @DynamicClassAttribute
-    def profile(self):
-        """Return rio-tiler image default profile."""
-        return img_profiles.get(self._name_, {})
-
-    @DynamicClassAttribute
-    def driver(self):
-        """Return rio-tiler image default profile."""
-        return ImageDrivers[self._name_].value
-
-    @DynamicClassAttribute
-    def mimetype(self):
-        """Return image mimetype."""
-        return MimeTypes[self._name_].value
-
-
-class TileType(Enum):
-    """Available Output Tile type."""
-
-    png = "png"
-    npy = "npy"
-    tif = "tif"
-    jpeg = "jpg"
-    jp2 = "jp2"
-    webp = "webp"
-    pngraw = "pngraw"
-    pbf = "pbf"
-    mvt = "mvt"
+class DataFormat(str, Enum):
+    """Data Format Base Class."""
 
     @DynamicClassAttribute
     def profile(self):
@@ -88,29 +51,38 @@ class TileType(Enum):
     def driver(self):
         """Return rio-tiler image default profile."""
         try:
-            return ImageDrivers[self._name_].value
+            return ImageDriver[self._name_].value
         except KeyError:
             return ""
 
     @DynamicClassAttribute
-    def mimetype(self):
+    def mediatype(self):
         """Return image mimetype."""
-        return MimeTypes[self._name_].value
+        return MediaType[self._name_].value
 
 
-class ColormapEnumFactory(Enum):
-    """Rio-Tiler colormaps."""
+class RasterFormat(DataFormat):
+    """Available Output Raster format."""
 
-    @DynamicClassAttribute
-    def data(self):
-        """Return rio-tiler image default profile."""
-        return cmap.get(self._name_)
+    png = "png"
+    npy = "npy"
+    tif = "tif"
+    jpeg = "jpeg"
+    jpg = "jpg"
+    jp2 = "jp2"
+    webp = "webp"
+    pngraw = "pngraw"
 
 
-ColorMaps = ColormapEnumFactory(  # type: ignore
-    "ColorMaps", [(a, a) for a in sorted(cmap.list())]
-)
+class VectorTileFormat(DataFormat):
+    """Available Output Vector Tile format."""
 
-ResamplingNames = Enum(  # type: ignore
-    "ResamplingNames", [(r.name, r.name) for r in Resampling]
-)
+    pbf = "pbf"
+    mvt = "mvt"
+
+
+class VectorTileType(str, Enum):
+    """Available Output Vector Tile type."""
+
+    point = "point"
+    polygon = "polygon"

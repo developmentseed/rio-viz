@@ -8,11 +8,10 @@ from typing import Any, Coroutine, Dict, List, Tuple, Type
 
 import attr
 import morecantile
-from starlette.concurrency import run_in_threadpool
-
 from rio_tiler import constants
 from rio_tiler.io import AsyncBaseReader, BaseReader, COGReader
 from rio_tiler.models import ImageData, ImageStatistics, Info, Metadata
+from starlette.concurrency import run_in_threadpool
 
 
 @attr.s
