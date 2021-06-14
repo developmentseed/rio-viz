@@ -35,12 +35,12 @@ class AssetsParams(DefaultDependency):
         None, title="Band indexes", description="band indexes",
     )
 
-    default_asset: Optional[List[str]] = field(init=False)
+    default_assets: Optional[List[str]] = field(init=False)
 
     def __post_init__(self):
         """Post Init."""
-        if self.asset or self.default_asset:
-            self.kwargs["assets"] = self.asset or self.default_asset
+        if self.asset or self.default_assets:
+            self.kwargs["assets"] = self.asset or self.default_assets
         if self.bidx is not None:
             self.kwargs["indexes"] = self.bidx
 
@@ -57,11 +57,11 @@ class BandsParams(DefaultDependency):
         [1], title="Band indexes", description="band indexes",
     )
 
-    default_band: Optional[List[str]] = field(init=False)
+    default_bands: Optional[List[str]] = field(init=False)
 
     def __post_init__(self):
         """Post Init."""
-        if self.band or self.default_band:
-            self.kwargs["bands"] = self.band or self.default_band
+        if self.band or self.default_bands:
+            self.kwargs["bands"] = self.band or self.default_bands
         if self.bidx is not None:
             self.kwargs["indexes"] = self.bidx

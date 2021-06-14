@@ -21,7 +21,7 @@ from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
 
 from rio_viz.dependencies import AssetsParams, BandsParams, IndexesParams
-from rio_viz.resources.enums import TileType
+from rio_viz.resources.enums import RasterFormat, VectorTileFormat, VectorTileType
 
 from titiler.core.dependencies import (
     ColorMapParams,
@@ -32,7 +32,6 @@ from titiler.core.dependencies import (
     RenderParams,
 )
 from titiler.core.models.mapbox import TileJSON
-from titiler.core.resources.enums import ImageType
 from titiler.core.resources.responses import XMLResponse
 
 try:
@@ -45,6 +44,8 @@ except ModuleNotFoundError:
 
 template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
+
+TileFormat = Union[RasterFormat, VectorTileFormat]
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -108,17 +109,19 @@ class viz:
 
         if self.reader_type == "cog":
             self.layer_dependency = IndexesParams
+
         elif self.reader_type == "bands":
             self.layer_dependency = type(
                 "BandsParams",
                 (BandsParams,),
-                {"default_band": self.layers.split(",") if self.layers else None},
+                {"default_bands": self.layers.split(",") if self.layers else None},
             )
+
         elif self.reader_type == "assets":
             self.layer_dependency = type(
                 "AssetsParams",
                 (AssetsParams,),
-                {"default_asset": self.layers.split(",") if self.layers else None},
+                {"default_assets": self.layers.split(",") if self.layers else None},
             )
 
         self.register_middleware()
@@ -157,7 +160,7 @@ class viz:
             "image/tiff; application=geotiff": {},
             "application/x-binary": {},
         }
-        mvt_media_type = {
+        mvt_media_types = {
             "application/x-binary": {},
             "application/x-protobuf": {},
         }
@@ -173,7 +176,7 @@ class viz:
         @self.router.get(r"/preview", **preview_params)
         @self.router.get(r"/preview.{format}", **preview_params)
         async def preview(
-            format: Optional[ImageType] = None,
+            format: Optional[RasterFormat] = None,
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
@@ -195,7 +198,7 @@ class viz:
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if not format:
-                format = ImageType.jpeg if data.mask.all() else ImageType.png
+                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
 
             image = data.post_process(
                 in_range=render_params.rescale_range,
@@ -226,7 +229,9 @@ class viz:
         @self.router.get(r"/part", **part_params)
         @self.router.get(r"/part.{format}", **part_params)
         async def part(
-            format: Optional[ImageType] = Query(None, description="Output image type."),
+            format: Optional[RasterFormat] = Query(
+                None, description="Output image type."
+            ),
             bbox: str = Query(
                 ..., description="Bounding box in form of 'minx,miny,maxx,maxy'"
             ),
@@ -255,7 +260,7 @@ class viz:
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if not format:
-                format = ImageType.jpeg if data.mask.all() else ImageType.png
+                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
 
             image = data.post_process(
                 in_range=render_params.rescale_range,
@@ -347,7 +352,7 @@ class viz:
         tile_params = dict(
             responses={
                 200: {
-                    "content": {**img_media_types, **mvt_media_type},
+                    "content": {**img_media_types, **mvt_media_types},
                     "description": "Return a tile.",
                 }
             },
@@ -361,25 +366,20 @@ class viz:
             z: int,
             x: int,
             y: int,
-            scale: int = Query(2, gt=0, lt=4),
-            format: Optional[TileType] = None,
+            format: Optional[TileFormat] = None,
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: RenderParams = Depends(),
             colormap: ColorMapParams = Depends(),
-            feature_type: str = Query(
-                None,
-                title="Feature type (Only for Vector)",
-                regex="^(point)|(polygon)$",
+            feature_type: Optional[VectorTileType] = Query(
+                None, title="Feature type (Only for MVT)",
             ),
         ):
             """Handle /tiles requests."""
-            tilesize = scale * 256
+            tilesize = 256
 
-            if format and format in [TileType.pbf, TileType.mvt]:
-                tilesize = (
-                    tilesize if feature_type and feature_type == "feature" else 128
-                )
+            if format and format in VectorTileFormat:
+                tilesize = 128
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
                 dataset_kwargs = dataset_params.kwargs
@@ -400,7 +400,8 @@ class viz:
 
                 dst_colormap = getattr(src_dst, "colormap", None)
 
-            if format and format in [TileType.pbf, TileType.mvt]:
+            # Vector Tile
+            if format and format in VectorTileFormat:
                 if not pixels_encoder:
                     raise HTTPException(
                         status_code=500,
@@ -417,12 +418,15 @@ class viz:
                     tile_data.data,
                     tile_data.mask,
                     bandnames,
-                    feature_type=feature_type,
+                    feature_type=feature_type.value,
                 )  # type: ignore
 
+            # Raster Tile
             else:
                 if not format:
-                    format = TileType.jpeg if tile_data.mask.all() else TileType.png
+                    format = (
+                        RasterFormat.jpeg if tile_data.mask.all() else RasterFormat.png
+                    )
 
                 image = tile_data.post_process(
                     in_range=render_params.rescale_range,
@@ -447,7 +451,7 @@ class viz:
         )
         async def tilejson(
             request: Request,
-            tile_format: Optional[TileType] = None,
+            tile_format: Optional[TileFormat] = None,
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
             render_params: RenderParams = Depends(),  # noqa
@@ -518,8 +522,8 @@ class viz:
         @self.router.get("/WMTSCapabilities.xml", response_class=XMLResponse)
         async def wmts(
             request: Request,
-            tile_format: ImageType = Query(
-                ImageType.png, description="Output image type. Default is png."
+            tile_format: RasterFormat = Query(
+                RasterFormat.png, description="Output image type. Default is png."
             ),
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa

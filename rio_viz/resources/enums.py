@@ -5,21 +5,42 @@ from types import DynamicClassAttribute
 
 from rio_tiler.profiles import img_profiles
 
-from titiler.core.resources.enums import ImageDriver, MediaType
+
+class MediaType(str, Enum):
+    """Responses Media types formerly known as MIME types."""
+
+    tif = "image/tiff; application=geotiff"
+    jp2 = "image/jp2"
+    png = "image/png"
+    pngraw = "image/png"
+    jpeg = "image/jpeg"
+    jpg = "image/jpg"
+    webp = "image/webp"
+    npy = "application/x-binary"
+    xml = "application/xml"
+    json = "application/json"
+    geojson = "application/geo+json"
+    html = "text/html"
+    text = "text/plain"
+    pbf = "application/x-protobuf"
+    mvt = "application/x-protobuf"
+
+
+class ImageDriver(str, Enum):
+    """Supported output GDAL drivers."""
+
+    jpeg = "JPEG"
+    jpg = "JPEG"
+    png = "PNG"
+    pngraw = "PNG"
+    tif = "GTiff"
+    webp = "WEBP"
+    jp2 = "JP2OpenJPEG"
+    npy = "NPY"
 
 
 class TileType(Enum):
-    """Available Output Tile type."""
-
-    png = "png"
-    npy = "npy"
-    tif = "tif"
-    jpeg = "jpg"
-    jp2 = "jp2"
-    webp = "webp"
-    pngraw = "pngraw"
-    pbf = "pbf"
-    mvt = "mvt"
+    """Tile Type enum."""
 
     @DynamicClassAttribute
     def profile(self):
@@ -38,3 +59,30 @@ class TileType(Enum):
     def mediatype(self):
         """Return image mimetype."""
         return MediaType[self._name_].value
+
+
+class RasterFormat(TileType):
+    """Available Output Raster format."""
+
+    png = "png"
+    npy = "npy"
+    tif = "tif"
+    jpeg = "jpeg"
+    jpg = "jpg"
+    jp2 = "jp2"
+    webp = "webp"
+    pngraw = "pngraw"
+
+
+class VectorTileFormat(TileType):
+    """Available Output Vector Tile format."""
+
+    pbf = "pbf"
+    mvt = "mvt"
+
+
+class VectorTileType(TileType):
+    """Available Output Vector Tile type."""
+
+    point = "point"
+    polygon = "polygon"

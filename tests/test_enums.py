@@ -2,7 +2,7 @@
 
 import pytest
 
-from rio_viz.resources.enums import TileType
+from rio_viz.resources.enums import RasterFormat, VectorTileFormat
 
 
 @pytest.mark.parametrize(
@@ -15,11 +15,19 @@ from rio_viz.resources.enums import TileType
         ("jp2", "JP2OpenJPEG", "image/jp2"),
         ("webp", "WEBP", "image/webp"),
         ("pngraw", "PNG", "image/png"),
-        ("pbf", "", "application/x-protobuf"),
-        ("mvt", "", "application/x-protobuf"),
     ],
 )
-def test_tiletype(value, driver, mimetype):
+def test_rasterformat(value, driver, mimetype):
     """Test driver and mimetype values."""
-    assert TileType[value].driver == driver
-    assert TileType[value].mediatype == mimetype
+    assert RasterFormat[value].driver == driver
+    assert RasterFormat[value].mediatype == mimetype
+
+
+@pytest.mark.parametrize(
+    "value,driver,mimetype",
+    [("pbf", "", "application/x-protobuf"), ("mvt", "", "application/x-protobuf")],
+)
+def test_vectorformat(value, driver, mimetype):
+    """Test driver and mimetype values."""
+    assert VectorTileFormat[value].driver == driver
+    assert VectorTileFormat[value].mediatype == mimetype
