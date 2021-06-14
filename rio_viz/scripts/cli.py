@@ -11,7 +11,6 @@ import numpy
 from rasterio.rio import options
 from rio_cogeo.cogeo import cog_translate, cog_validate
 from rio_cogeo.profiles import cog_profiles
-
 from rio_tiler.io import (
     AsyncBaseReader,
     BaseReader,
@@ -19,6 +18,7 @@ from rio_tiler.io import (
     MultiBandReader,
     MultiBaseReader,
 )
+
 from rio_viz import app
 from rio_viz.compat import AsyncReader
 
@@ -150,7 +150,6 @@ def viz(
     config,
 ):
     """Rasterio Viz cli."""
-
     if reader:
         module, classname = reader.rsplit(".", 1)
         reader = getattr(importlib.import_module(module), classname)  # noqa

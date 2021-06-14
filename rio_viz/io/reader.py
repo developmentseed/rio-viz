@@ -5,7 +5,6 @@ from typing import Dict, Type
 import attr
 from braceexpand import braceexpand
 from morecantile import TileMatrixSet
-
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.errors import InvalidBandName
 from rio_tiler.io import BaseReader, COGReader, MultiBandReader

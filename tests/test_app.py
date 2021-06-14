@@ -3,10 +3,10 @@
 import os
 
 import pytest
-from starlette.testclient import TestClient
-
 from rio_tiler.errors import TileOutsideBounds
 from rio_tiler.io import COGReader
+from starlette.testclient import TestClient
+
 from rio_viz.app import viz
 from rio_viz.compat import AsyncReader
 from rio_viz.io.reader import MultiFilesReader
@@ -25,8 +25,8 @@ def test_viz():
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
     assert app.template_url == "http://127.0.0.1:8080/index.html"
-    client = TestClient(app.app)
 
+    client = TestClient(app.app)
     response = client.get("/")
     assert response.status_code == 404
 
@@ -49,11 +49,11 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43.png?rescale=1,10&color_map=cfastie")
+    response = client.get("/tiles/7/64/43.png?rescale=1,10&colormap_name=cfastie")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43?rescale=1,10&color_map=cfastie")
+    response = client.get("/tiles/7/64/43?rescale=1,10&colormap_name=cfastie")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
@@ -75,23 +75,23 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
-    response = client.get("/preview?rescale=1,10&color_map=cfastie")
+    response = client.get("/preview?rescale=1,10&colormap_name=cfastie")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
     assert response.headers["cache-control"] == "no-cache"
 
-    response = client.get("/preview.png?rescale=1,10&color_map=cfastie")
+    response = client.get("/preview.png?rescale=1,10&colormap_name=cfastie")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/part.png?bbox=-2.00,48.5,-1,49.5&rescale=1,10&color_map=cfastie"
+        "/part.png?bbox=-2.00,48.5,-1,49.5&rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/part?bbox=-2.00,48.5,-1,49.5&rescale=1,10&color_map=cfastie"
+        "/part?bbox=-2.00,48.5,-1,49.5&rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
@@ -134,7 +134,6 @@ def test_viz():
 
 def test_viz_custom():
     """Should work as expected (create TileServer object)."""
-
     src_path = cog_path
     dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": COGReader})
 
@@ -145,7 +144,6 @@ def test_viz_custom():
 
 def test_viz_multi():
     """Should work as expected (create TileServer object)."""
-
     src_path = cogb1b2b3_path
     dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": MultiFilesReader})
 
