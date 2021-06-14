@@ -39,8 +39,8 @@ class ImageDriver(str, Enum):
     npy = "NPY"
 
 
-class TileType(Enum):
-    """Tile Type enum."""
+class DataFormat(str, Enum):
+    """Data Format Base Class."""
 
     @DynamicClassAttribute
     def profile(self):
@@ -61,7 +61,7 @@ class TileType(Enum):
         return MediaType[self._name_].value
 
 
-class RasterFormat(TileType):
+class RasterFormat(DataFormat):
     """Available Output Raster format."""
 
     png = "png"
@@ -74,14 +74,14 @@ class RasterFormat(TileType):
     pngraw = "pngraw"
 
 
-class VectorTileFormat(TileType):
+class VectorTileFormat(DataFormat):
     """Available Output Vector Tile format."""
 
     pbf = "pbf"
     mvt = "mvt"
 
 
-class VectorTileType(TileType):
+class VectorTileType(str, Enum):
     """Available Output Vector Tile type."""
 
     point = "point"
