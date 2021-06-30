@@ -9,6 +9,7 @@ import attr
 import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from geojson_pydantic.features import Feature
 from rio_tiler.io import AsyncBaseReader
 from rio_tiler.models import Info, Metadata
 from starlette.concurrency import run_in_threadpool
@@ -303,6 +304,63 @@ class viz:
                 )
 
             return {"coordinates": [lon, lat], "value": results}
+
+        feature_params = dict(
+            responses={
+                200: {
+                    "content": img_media_types,
+                    "description": "Return part of a dataset defined by a geojson feature.",
+                }
+            },
+            response_class=Response,
+            description="Return part of a dataset defined by a geojson feature.",
+        )
+
+        @self.router.post(r"/feature", **feature_params)
+        @self.router.post(r"/feature.{format}", **feature_params)
+        async def feature(
+            geom: Feature,
+            format: Optional[RasterFormat] = Query(
+                None, description="Output image type."
+            ),
+            layer_params=Depends(self.layer_dependency),
+            img_params: ImageParams = Depends(),
+            dataset_params: DatasetParams = Depends(),
+            render_params: RenderParams = Depends(),
+            colormap: ColorMapParams = Depends(),
+        ):
+            """Handle /feature requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                dataset_kwargs = dataset_params.kwargs
+                if self.nodata is not None and not dataset_kwargs.get("nodata"):
+                    dataset_kwargs["nodata"] = self.nodata
+
+                # Adapt options for each reader type
+                layer_kwargs = layer_params.kwargs
+                self._update_layer_params(src_dst, layer_kwargs)
+
+                data = await src_dst.feature(
+                    geom.dict(exclude_none=True), **layer_kwargs, **dataset_kwargs
+                )
+                dst_colormap = getattr(src_dst, "colormap", None)
+
+            if not format:
+                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
+
+            image = data.post_process(
+                in_range=render_params.rescale_range,
+                color_formula=render_params.color_formula,
+            )
+
+            content = image.render(
+                img_format=format.driver,
+                colormap=colormap or dst_colormap,
+                add_mask=render_params.return_mask,
+                **format.profile,
+                **render_params.kwargs,
+            )
+
+            return Response(content, media_type=format.mediatype)
 
         @self.router.get(
             "/metadata",
