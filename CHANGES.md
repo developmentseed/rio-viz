@@ -3,6 +3,7 @@
 
 * add `titiler.core` as dependencies to reduce code duplication.
 * update code and templates to follow `titiler.core` specs.
+* add `feature.{format}` post endpoint to get image from polygon shaped GeoJSON (https://github.com/developmentseed/rio-viz/pull/36)
 
 ## 0.6.1 (2021-04-08)
 
