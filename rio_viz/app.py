@@ -10,7 +10,7 @@ import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from rio_tiler.io import AsyncBaseReader
-from rio_tiler.models import Info, Metadata
+from rio_tiler.models import ImageStatistics, Info, Metadata
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -108,7 +108,8 @@ class viz:
         self.router = APIRouter()
 
         if self.reader_type == "cog":
-            self.layer_dependency = IndexesParams
+            # For simple BaseReader (e.g COGReader) we don't add more dependencies.
+            self.layer_dependency = DefaultDependency
 
         elif self.reader_type == "bands":
             self.layer_dependency = type(
@@ -165,6 +166,123 @@ class viz:
             "application/x-protobuf": {},
         }
 
+        @self.router.get(
+            "/info",
+            # for MultiBaseReader the output in `Dict[str, Info]`
+            response_model=Dict[str, Info] if self.reader_type == "assets" else Info,
+            response_model_exclude={"minzoom", "maxzoom", "center"},
+            response_model_exclude_none=True,
+            responses={200: {"description": "Return the info of the COG."}},
+            tags=["API"],
+        )
+        async def info(layer_params=Depends(self.layer_dependency)):
+            """Handle /info requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+
+                # Adapt options for each reader type
+                layer_kwargs = layer_params.kwargs
+                self._update_layer_params(src_dst, layer_kwargs)
+
+                return await src_dst.info(**layer_kwargs)
+
+        @self.router.get(
+            "/stats",
+            # for MultiBaseReader the output in `Dict[str, Dict[str, ImageStatistics]]`
+            response_model=Dict[str, Dict[str, ImageStatistics]]
+            if self.reader_type == "assets"
+            else Dict[str, ImageStatistics],
+            response_model_exclude={"minzoom", "maxzoom", "center"},
+            response_model_exclude_none=True,
+            responses={200: {"description": "Return the statistics of the COG."}},
+            tags=["API"],
+        )
+        async def stats(
+            metadata_params: MetadataParams = Depends(),
+            layer_params=Depends(self.layer_dependency),
+            dataset_params: DatasetParams = Depends(),
+        ):
+            """Handle /stats requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                dataset_kwargs = dataset_params.kwargs
+                if self.nodata is not None and not dataset_kwargs.get("nodata"):
+                    dataset_kwargs["nodata"] = self.nodata
+
+                # Adapt options for each reader type
+                layer_kwargs = layer_params.kwargs
+                self._update_layer_params(src_dst, layer_kwargs)
+
+                return await src_dst.stats(
+                    metadata_params.pmin,
+                    metadata_params.pmax,
+                    **layer_kwargs,
+                    **dataset_kwargs,
+                    **metadata_params.kwargs,
+                )
+
+        @self.router.get(
+            "/metadata",
+            # for MultiBaseReader the output in `Dict[str, Metadata]`
+            response_model=Dict[str, Metadata]
+            if self.reader_type == "assets"
+            else Metadata,
+            response_model_exclude={"minzoom", "maxzoom", "center"},
+            response_model_exclude_none=True,
+            responses={200: {"description": "Return the metadata of the COG."}},
+            tags=["API"],
+        )
+        async def metadata(
+            metadata_params: MetadataParams = Depends(),
+            layer_params=Depends(self.layer_dependency),
+            dataset_params: DatasetParams = Depends(),
+        ):
+            """Handle /metadata requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                dataset_kwargs = dataset_params.kwargs
+                if self.nodata is not None and not dataset_kwargs.get("nodata"):
+                    dataset_kwargs["nodata"] = self.nodata
+
+                # Adapt options for each reader type
+                layer_kwargs = layer_params.kwargs
+                self._update_layer_params(src_dst, layer_kwargs)
+
+                return await src_dst.metadata(
+                    metadata_params.pmin,
+                    metadata_params.pmax,
+                    **layer_kwargs,
+                    **dataset_kwargs,
+                    **metadata_params.kwargs,
+                )
+
+        @self.router.get(
+            "/point",
+            responses={200: {"description": "Return a point value."}},
+            tags=["API"],
+        )
+        async def point(
+            coordinates: str = Query(
+                ..., description="Coma (',') delimited lon,lat coordinates"
+            ),
+            indexes_params: IndexesParams = Depends(),
+            layer_params=Depends(self.layer_dependency),
+            dataset_params: DatasetParams = Depends(),
+        ):
+            """Handle /point requests."""
+            lon, lat = list(map(float, coordinates.split(",")))
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                dataset_kwargs = dataset_params.kwargs
+                if self.nodata is not None and not dataset_kwargs.get("nodata"):
+                    dataset_kwargs["nodata"] = self.nodata
+
+                # Adapt options for each reader type
+                layer_kwargs = layer_params.kwargs
+                self._update_layer_params(src_dst, layer_kwargs)
+
+                results = await src_dst.point(
+                    lon, lat, **indexes_params.kwargs, **layer_kwargs, **dataset_kwargs,
+                )
+
+            return {"coordinates": [lon, lat], "value": results}
+
         preview_params = dict(
             responses={
                 200: {"content": img_media_types, "description": "Return a preview."}
@@ -173,10 +291,11 @@ class viz:
             description="Return a preview.",
         )
 
-        @self.router.get(r"/preview", **preview_params)
-        @self.router.get(r"/preview.{format}", **preview_params)
+        @self.router.get(r"/preview", **preview_params, tags=["API"])
+        @self.router.get(r"/preview.{format}", **preview_params, tags=["API"])
         async def preview(
             format: Optional[RasterFormat] = None,
+            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
@@ -192,8 +311,12 @@ class viz:
                 # Adapt options for each reader type
                 layer_kwargs = layer_params.kwargs
                 self._update_layer_params(src_dst, layer_kwargs)
+
                 data = await src_dst.preview(
-                    **img_params.kwargs, **layer_kwargs, **dataset_kwargs,
+                    **img_params.kwargs,
+                    **indexes_params.kwargs,
+                    **layer_kwargs,
+                    **dataset_kwargs,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
@@ -226,8 +349,8 @@ class viz:
             description="Return a part of a dataset.",
         )
 
-        @self.router.get(r"/part", **part_params)
-        @self.router.get(r"/part.{format}", **part_params)
+        @self.router.get(r"/part", **part_params, tags=["API"])
+        @self.router.get(r"/part.{format}", **part_params, tags=["API"])
         async def part(
             format: Optional[RasterFormat] = Query(
                 None, description="Output image type."
@@ -235,6 +358,7 @@ class viz:
             bbox: str = Query(
                 ..., description="Bounding box in form of 'minx,miny,maxx,maxy'"
             ),
+            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
@@ -253,6 +377,7 @@ class viz:
 
                 data = await src_dst.part(
                     list(map(float, bbox.split(","))),
+                    **indexes_params.kwargs,
                     **img_params.kwargs,
                     **layer_kwargs,
                     **dataset_kwargs,
@@ -277,78 +402,6 @@ class viz:
 
             return Response(content, media_type=format.mediatype)
 
-        @self.router.get(
-            "/point", responses={200: {"description": "Return a point value."}},
-        )
-        async def point(
-            coordinates: str = Query(
-                ..., description="Coma (',') delimited lon,lat coordinates"
-            ),
-            layer_params=Depends(self.layer_dependency),
-            dataset_params: DatasetParams = Depends(),
-        ):
-            """Handle /point requests."""
-            lon, lat = list(map(float, coordinates.split(",")))
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
-
-                # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
-
-                results = await src_dst.point(
-                    lon, lat, **layer_kwargs, **dataset_kwargs
-                )
-
-            return {"coordinates": [lon, lat], "value": results}
-
-        @self.router.get(
-            "/metadata",
-            response_model=Union[Dict[str, Metadata], Metadata],
-            response_model_exclude={"minzoom", "maxzoom", "center"},
-            response_model_exclude_none=True,
-            responses={200: {"description": "Return the metadata of the COG."}},
-        )
-        async def metadata(
-            metadata_params: MetadataParams = Depends(),
-            layer_params=Depends(self.layer_dependency),
-            dataset_params: DatasetParams = Depends(),
-        ):
-            """Handle /metadata requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
-
-                # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
-
-                return await src_dst.metadata(
-                    metadata_params.pmin,
-                    metadata_params.pmax,
-                    **layer_kwargs,
-                    **dataset_kwargs,
-                    **metadata_params.kwargs,
-                )
-
-        @self.router.get(
-            "/info",
-            response_model=Union[Dict[str, Info], Info],
-            response_model_exclude={"minzoom", "maxzoom", "center"},
-            response_model_exclude_none=True,
-            responses={200: {"description": "Return the metadata of the COG."}},
-        )
-        async def info(layer_params=Depends(self.layer_dependency)):
-            """Handle /info requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
-                return await src_dst.info(**layer_kwargs)
-
         tile_params = dict(
             responses={
                 200: {
@@ -360,13 +413,14 @@ class viz:
             description="Read COG and return a tile",
         )
 
-        @self.router.get(r"/tiles/{z}/{x}/{y}", **tile_params)
-        @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **tile_params)
+        @self.router.get(r"/tiles/{z}/{x}/{y}", **tile_params, tags=["API"])
+        @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **tile_params, tags=["API"])
         async def tile(
             z: int,
             x: int,
             y: int,
             format: Optional[TileFormat] = None,
+            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: RenderParams = Depends(),
@@ -391,7 +445,13 @@ class viz:
                 self._update_layer_params(src_dst, layer_kwargs)
 
                 tile_data = await src_dst.tile(
-                    x, y, z, tilesize=tilesize, **dataset_kwargs, **layer_kwargs,
+                    x,
+                    y,
+                    z,
+                    tilesize=tilesize,
+                    **indexes_params.kwargs,
+                    **dataset_kwargs,
+                    **layer_kwargs,
                 )
 
                 bandnames = layer_kwargs.get(
@@ -448,10 +508,12 @@ class viz:
             response_model=TileJSON,
             responses={200: {"description": "Return a tilejson"}},
             response_model_exclude_none=True,
+            tags=["API"],
         )
         async def tilejson(
             request: Request,
             tile_format: Optional[TileFormat] = None,
+            indexes_params: IndexesParams = Depends(),  # noqa
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
             render_params: RenderParams = Depends(),  # noqa
@@ -492,39 +554,14 @@ class viz:
             )
 
         @self.router.get(
-            "/index.html",
-            responses={200: {"description": "Simple COG viewer."}},
-            response_class=HTMLResponse,
+            "/WMTSCapabilities.xml", response_class=XMLResponse, tags=["API"]
         )
-        def viewer(request: Request):
-            """Handle /index.html."""
-            if self.reader_type == "cog":
-                name = "index.html"
-            elif self.reader_type == "bands":
-                name = "bands.html"
-            elif self.reader_type == "assets":
-                name = "assets.html"
-
-            return templates.TemplateResponse(
-                name=name,
-                context={
-                    "request": request,
-                    "tilejson_endpoint": request.url_for("tilejson"),
-                    "metadata_endpoint": request.url_for("metadata"),
-                    "point_endpoint": request.url_for("point"),
-                    "mapbox_access_token": self.token,
-                    "mapbox_style": self.style,
-                    "allow_3d": has_mvt,
-                },
-                media_type="text/html",
-            )
-
-        @self.router.get("/WMTSCapabilities.xml", response_class=XMLResponse)
         async def wmts(
             request: Request,
             tile_format: RasterFormat = Query(
                 RasterFormat.png, description="Output image type. Default is png."
             ),
+            indexes_params: IndexesParams = Depends(),  # noqa
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
             render_params: RenderParams = Depends(),  # noqa
@@ -586,6 +623,35 @@ class viz:
                     "media_type": tile_format.mediatype,
                 },
                 media_type="application/xml",
+            )
+
+        @self.router.get(
+            "/index.html",
+            responses={200: {"description": "Simple COG viewer."}},
+            response_class=HTMLResponse,
+            tags=["Viewer"],
+        )
+        def viewer(request: Request):
+            """Handle /index.html."""
+            if self.reader_type == "cog":
+                name = "index.html"
+            elif self.reader_type == "bands":
+                name = "bands.html"
+            elif self.reader_type == "assets":
+                name = "assets.html"
+
+            return templates.TemplateResponse(
+                name=name,
+                context={
+                    "request": request,
+                    "tilejson_endpoint": request.url_for("tilejson"),
+                    "metadata_endpoint": request.url_for("metadata"),
+                    "point_endpoint": request.url_for("point"),
+                    "mapbox_access_token": self.token,
+                    "mapbox_style": self.style,
+                    "allow_3d": has_mvt,
+                },
+                media_type="text/html",
             )
 
     @property
