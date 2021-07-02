@@ -645,7 +645,8 @@ class viz:
                 context={
                     "request": request,
                     "tilejson_endpoint": request.url_for("tilejson"),
-                    "metadata_endpoint": request.url_for("metadata"),
+                    "stats_endpoint": request.url_for("stats"),
+                    "info_endpoint": request.url_for("info"),
                     "point_endpoint": request.url_for("point"),
                     "mapbox_access_token": self.token,
                     "mapbox_style": self.style,
