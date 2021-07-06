@@ -36,14 +36,14 @@
                 opacity: 0.5;
                 font-size: 45px;
             }
-            .loading-map.off{
+            .loading-map.off {
                 opacity: 0;
                 -o-transition: all .5s ease;
                 -webkit-transition: all .5s ease;
                 -moz-transition: all .5s ease;
                 -ms-transition: all .5s ease;
                 transition: all ease .5s;
-                visibility:hidden;
+                visibility: hidden;
             }
             .middle-center {
                 position: absolute;
@@ -78,7 +78,6 @@
             #toolbar {
               height: 35px;
             }
-
             #toolbar li {
               display: block;
               color: #fff;
@@ -99,35 +98,28 @@
                     -ms-user-select: none;
                         user-select: none;
             }
-
             #toolbar li svg {
               font-size: 25px;
               line-height: 25px;
               padding-bottom: 0;
             }
-
             #toolbar li:hover {
               background-color: #28333b;
             }
-
             #toolbar li.active {
               color: #000;
               background-color: #fff;
             }
-
             #toolbar li.disabled {
                 pointer-events:none;
                 opacity:0.4;
             }
-
             #menu-content section {
               display: none;
             }
-
             #menu-content section.active {
               display: inherit;
             }
-
             #hide-arrow {
               -o-transition: all .5s ease;
               -webkit-transition: all .5s ease;
@@ -135,11 +127,9 @@
               -ms-transition: all .5s ease;
               transition: all ease .5s;
             }
-
             #hide-arrow.off {
               transform: rotate(-180deg);
             }
-
             #btn-hide {
               position: absolute;
               top: 0;
@@ -151,13 +141,11 @@
               color: #28333b;
               background-color: #fff;
             }
-
             #btn-hide:hover {
               color: #fff;
               background-color: #28333b;
               cursor: pointer;
             }
-
             .line-red {
               fill: none;
               stroke: red;
@@ -173,6 +161,9 @@
               stroke: blue;
               stroke-width: 1.5px;
             }
+            #histogram-table td {
+              min-width: 60px;
+            }
 
             @media(max-width: 767px) {
 
@@ -184,16 +175,13 @@
                 -ms-transition: all .5s ease;
                 transition: all ease .5s;
               }
-
               .mapboxgl-ctrl-attrib {
                   font-size: 10px;
               }
             }
-
         </style>
     </head>
     <body>
-
     <div id='menu' class='flex-child w240 w360-ml absolute bg-white z2 off'>
 
       <ul id='toolbar' class='grid'>
@@ -208,7 +196,7 @@
       <div id='menu-content' class='relative'>
 
         <!-- RGB Selection -->
-        <section id='3b-section' class='px12 pt12 pb6 active'>
+        <section id='3b-section' class='px6 py6 active'>
           <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> RGB</div>
           <div id='rgb-buttons' class='align-center px6 py6'>
             <div class='select-container'>
@@ -226,30 +214,23 @@
               <div class='select-arrow color-black'></div>
             </div>
           </div>
-
-          <!-- Histogram -->
-          <div>
-            <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
-            <div id="histogram3b" class="w-full h120 h240-ml relative"></div>
-          </div>
-
         </section>
 
         <!-- 1 Band Selection -->
-        <section id='1b-section' class='px12 pt12 pb6'>
+        <section id='1b-section' class='px6 py6'>
           <div class='txt-h5 mb6 color-black'>
             <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers
           </div>
           <div class='select-container wmax-full'>
-            <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'>
-            </select>
+            <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'></select>
             <div class='select-arrow color-black'></div>
           </div>
 
           <div class='txt-h5 mt6 mb6 color-black'>
             <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Viz
           </div>
-          <div id='viz-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
+
+          <div id='viz-selector' class='toggle-group bg-gray-faint mb6' style="line-height: 0">
             <label class='toggle-container'>
               <input value="raster" checked="checked" name='toggle-viz' type='radio' />
               <div title='Raster Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w18 h18'><use xlink:href='#icon-raster'/></svg></div>
@@ -262,12 +243,6 @@
               <input value="polygon" name='toggle-viz' type='radio' />
               <div title='3D Viz' class='toggle color-gray-dark-on-hover'><svg class='icon icon--l inline-block w18 h18'><use xlink:href='#icon-polygon'/></svg></div>
             </label>
-          </div>
-
-          <!-- 1b Histogram -->
-          <div>
-            <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
-            <div id="histogram1b" class="w-full h120 h240-ml relative"></div>
           </div>
 
           <!-- Color Map -->
@@ -302,47 +277,24 @@
           </div>
         </section>
 
-        <!-- Histogram Cut -->
-        <div class='px12 pt12 pb6'>
-          <div class='txt-h5 mt6 mb6 color-black'>Histogram Cut</div>
-          <div id='histcut-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
-            <label class='toggle-container'>
-              <input value="none" checked="checked" name='toggle-histo' type='radio' />
-              <div title='None' class='toggle color-gray-dark-on-hover'>None</div>
-            </label>
-            <label class='toggle-container'>
-              <input value="minmax" name='toggle-histo' type='radio' />
-              <div title='MinMax' class='toggle color-gray-dark-on-hover'>MinMax</div>
-            </label>
-            <label class='toggle-container'>
-              <input value="2pc" name='toggle-histo' type='radio' />
-              <div title='2%-98%' class='toggle color-gray-dark-on-hover'>2%</div>
-            </label>
-            <label class='toggle-container'>
-              <input value="5pc" name='toggle-histo' type='radio' />
-              <div title='5%-95%' class='toggle color-gray-dark-on-hover'>5%</div>
-            </label>
-          </div>
+        <!-- Min/Max -->
+        <div id="minmax-data" class='px6 py6 none'>
+          <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-smooth-ramp'/></svg> Rescale</div>
+          <input id="data-min" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
+          <input id="data-max" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
+          <button id="btn-rescale" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black mt6'>Apply</button>
         </div>
 
-        <!-- Resampling -->
-        <div class='px12 pt12 pb6'>
-          <div class='txt-h5 mt6 mb6 color-black'>Resampling Method</div>
-          <div id='resamp-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
-            <label class='toggle-container'>
-              <input value='bilinear' name='toggle-resamp' type='radio' />
-              <div title='bilinear' class='toggle color-gray-dark-on-hover'>bilinear</div>
-            </label>
-            <label class='toggle-container'>
-              <input value='cubic' name='toggle-resamp' type='radio' />
-              <div title='cubic' class='toggle color-gray-dark-on-hover'>cubic</div>
-            </label>
-            <label class='toggle-container'>
-              <input value='nearest' checked='checked' name='toggle-resamp' type='radio' />
-              <div title='nearest' class='toggle color-gray-dark-on-hover'>nearest</div>
-            </label>
+        <!-- Histogram -->
+        <div class='px6 py6 w-full'>
+          <div class='txt-h5 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
+          <div id='fetch-stats-div' class='w-full align-center'>
+            <button id="btn-stats" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black mx12 my12'>Get Dataset Statistics</button>
           </div>
+          <div id="histogram" class="w-full h120 h240-ml relative loading none"></div>
+          <table id="histogram-table" class="none"></table>
         </div>
+
       </div>
       <button id='btn-hide'><svg id='hide-arrow' class='icon'><use xlink:href='#icon-arrow-right'/></svg></button>
     </div>
@@ -359,13 +311,29 @@
     </div>
 
     <script>
-    var scope = { metadata: {}, config: {} }
+    var scope = {
+      dataset_statistics: undefined,
+      data_type: undefined,
+      band_descriptions: undefined
+    }
 
     mapboxgl.accessToken = '{{ mapbox_access_token  }}'
 
     const tilejson_endpoint = '{{ tilejson_endpoint }}'
-    const metadata_endpoint = '{{ metadata_endpoint }}'
+    const info_endpoint = '{{ info_endpoint }}'
+    const stats_endpoint = '{{ stats_endpoint }}'
     const point_endpoint = '{{ point_endpoint }}'
+
+    const dtype_ranges = {
+      'int8': [-128, 127],
+      'uint8': [0, 255],
+      'uint16': [0, 65535],
+      'int16': [-32768, 32767],
+      'uint32': [0, 4294967295],
+      'int32': [-2147483648, 2147483647],
+      'float32': [-3.4028235e+38, 3.4028235e+38],
+      'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
+    }
 
     if ('{{ allow_3d }}' !== "True") {
       document.getElementById('3d-point').classList.add('none')
@@ -392,22 +360,16 @@
     })
 
     const set1bViz = () => {
-      params = {
-        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
-      }
-
+      params = {}
       const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
       switch (vizType) {
         case 'raster':
-          const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-          indexes = active_layer.getAttribute('band')
-          params.bidx = indexes
+          params.bidx = document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")
 
-          if (document.getElementById('histcut-selector').querySelector("input[name='toggle-histo']:checked").value !== 'none') {
-            const minV = scope.config[indexes].min
-            const maxV = scope.config[indexes].max
-            params.rescale =  `${minV},${maxV}`
+          if (['uint8','int8'].indexOf(scope.data_type) === -1) {
+            params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
           }
+
           const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
           if (cmap.value !== 'b&w') params.colormap_name = cmap.value
 
@@ -421,7 +383,7 @@
         case 'point':
           map.addSource('mvt', {
             type: 'vector',
-            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=point&resampling_method=${params.resampling_method}`
+            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=point`
           })
           addLayer(vizType)
           break
@@ -429,7 +391,7 @@
         case 'polygon':
           map.addSource('mvt', {
             type: 'vector',
-            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=polygon&resampling_method=${params.resampling_method}`
+            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=polygon`
           })
           addLayer(vizType)
           break
@@ -444,25 +406,20 @@
       const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
       const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
 
-      params = {
-        resampling_method:  document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value,
+      params = {}
+      if (['uint8','int8'].indexOf(scope.data_type) === -1) {
+        params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
       }
       let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
+      if (url_params !== '') url_params = `${url_params}&`
 
-      if (document.getElementById('histcut-selector').querySelector("input[name='toggle-histo']:checked").value !== 'none') {
-          const r_rescale = `${scope.config[r].min},${scope.config[r].max}`
-          const g_rescale = `${scope.config[g].min},${scope.config[g].max}`
-          const b_rescale = `${scope.config[b].min},${scope.config[b].max}`
-          const rescale_params = [r_rescale, g_rescale, b_rescale].map(i => `rescale=${i}`).join('&')
-          url_params += `&${rescale_params}`
-      }
 
       const indexes_params = [r, g, b].map(i => `bidx=${i}`).join('&')
-      let url = `${tilejson_endpoint}?${url_params}&${indexes_params}`
+      let url = `${tilejson_endpoint}?${url_params}${indexes_params}`
 
       map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
       map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
-      addHisto3Bands()
+      if (scope.dataset_statistics) addHisto3Bands()
     }
 
     const switchViz = () => {
@@ -489,15 +446,13 @@
       if (map.getLayer('raster')) map.removeLayer('raster')
       if (map.getLayer('mvt')) map.removeLayer('mvt')
 
-      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const indexes = active_layer.getAttribute('band')
-
-      let sMin = scope.config[indexes].min
-      const sMax = scope.config[indexes].max
+      let sMin = parseFloat(document.getElementById('data-min').value)
+      const sMax = parseFloat(document.getElementById('data-max').value)
       if (sMin === sMax) sMin = sMin - 0.00001
 
-      addHisto1Band()
+      if (scope.dataset_statistics) addHisto1Band()
 
+      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
       const propName = active_layer.value
       const exag = parseFloat(document.getElementById('ex-value').value)
 
@@ -573,9 +528,9 @@
       const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("name")
       const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("name")
 
-      const rStats = scope.metadata.statistics[r]
-      const gStats = scope.metadata.statistics[g]
-      const bStats = scope.metadata.statistics[b]
+      const rStats = scope.dataset_statistics[r]
+      const gStats = scope.dataset_statistics[g]
+      const bStats = scope.dataset_statistics[b]
 
       const minV = Math.min(...[rStats.min, gStats.min, bStats.min])
       const maxV = Math.max(...[rStats.max, gStats.max, bStats.max])
@@ -599,16 +554,16 @@
       bCounts = bCounts.map((e) => {return e / sumB * 100})
       const maxH = Math.max(...rCounts, ...gCounts, ...bCounts)
 
-      const bbox = d3.select('#histogram3b').node().getBoundingClientRect()
+      const bbox = d3.select('#histogram').node().getBoundingClientRect()
 
       // set the dimensions and margins of the graph
       const margin = { top: 10, right: 30, bottom: 30, left: 40 }
       const width = bbox.width - margin.left - margin.right
       const height = bbox.height - margin.top - margin.bottom
 
-      d3.select('#histogram3b').selectAll('*').remove()
+      d3.select('#histogram').selectAll('*').remove()
       // append the svg object to the body of the page
-      var svg = d3.select('#histogram3b')
+      var svg = d3.select('#histogram')
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
@@ -662,11 +617,29 @@
           .attr("y", 6)
           .attr("dy", ".71em")
           .style("text-anchor", "end")
+
+      const data = {
+        "Min": `${rStats.min}, ${gStats.min}, ${bStats.min}`,
+        "Max": `${rStats.max}, ${gStats.max}, ${bStats.max}`,
+        "Stddev": `${rStats.std.toFixed(2)}, ${gStats.std.toFixed(2)}, ${bStats.std.toFixed(2)}`,
+      }
+
+      let table = document.getElementById("histogram-table")
+      table.innerHTML = ""
+
+      for (let element of Object.entries(data)) {
+        let row = table.insertRow();
+        for (key in element) {
+          let cell = row.insertCell();
+          let text = document.createTextNode(element[key]);
+          cell.appendChild(text);
+        }
+      }
+      table.classList.remove('none')
     }
 
     const addHisto1Band = () => {
-      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const stats = scope.metadata.statistics[active_layer.getAttribute('band')]
+      const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("name")]
 
       let counts = stats.histogram[0]
       const sum = counts.reduce(function(a, b){
@@ -676,16 +649,16 @@
       const maxH = Math.max(...counts)
 
       const values = stats.histogram[1]
-      const bbox = d3.select('#histogram1b').node().getBoundingClientRect()
+      const bbox = d3.select('#histogram').node().getBoundingClientRect()
 
       // set the dimensions and margins of the graph
       const margin = { top: 10, right: 30, bottom: 30, left: 40 }
       const width = bbox.width - margin.left - margin.right
       const height = bbox.height - margin.top - margin.bottom
 
-      d3.select('#histogram1b').selectAll('*').remove()
+      d3.select('#histogram').selectAll('*').remove()
       // append the svg object to the body of the page
-      var svg = d3.select('#histogram1b')
+      var svg = d3.select('#histogram')
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
@@ -727,7 +700,50 @@
         .attr('width', 10)
         .attr('height', d => { return height - y(d.count) })
         .style('fill', '#69b3a2')
+
+        const data = {
+          "Min": stats.min,
+          "Max": stats.max,
+          "Stddev": stats.std.toFixed(2),
+        }
+
+        let table = document.getElementById("histogram-table")
+        table.innerHTML = ""
+
+        for (let element of Object.entries(data)) {
+          let row = table.insertRow();
+          for (key in element) {
+            let cell = row.insertCell();
+            let text = document.createTextNode(element[key]);
+            cell.appendChild(text);
+          }
+        }
+        table.classList.remove('none')
     }
+
+    document.getElementById('btn-stats').addEventListener('click', () => {
+      document.getElementById('fetch-stats-div').classList.add('none')
+      document.getElementById('histogram').classList.remove('none')
+      document.getElementById('histogram-table').classList.remove('none')
+
+      fetch(`${stats_endpoint}?max_size=256`)
+        .then(res => {
+          if (res.ok) return res.json()
+          throw new Error('Network response was not ok.')
+        })
+        .then(data => {
+          scope.dataset_statistics = data
+          if (document.getElementById('toolbar').querySelector(".active").id === '1b') {
+            addHisto1Band()
+          } else {
+            addHisto3Bands()
+          }
+          document.getElementById('histogram').classList.remove('loading')
+        })
+        .catch(err => {
+          console.warn(err)
+        })
+      })
 
     document.getElementById('btn-hide').addEventListener('click', () => {
       document.getElementById('hide-arrow').classList.toggle('off')
@@ -756,11 +772,6 @@
       switchViz()
     })
 
-    document.getElementById('resamp-selector').addEventListener('change', (e) => {
-      switchViz()
-    })
-
-
     // MVT have already all the layers while for raster we need to fetch new tiles
     const updateViz = () => {
       const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
@@ -788,6 +799,10 @@
       updateViz()
     })
 
+    document.getElementById('btn-rescale').addEventListener('click', () => {
+      updateViz()
+    })
+
     const switchPane = (event) => {
       const cur = document.getElementById('toolbar').querySelector(".active")
       const activeViz = cur.id
@@ -802,48 +817,7 @@
       switchViz()
     }
 
-    document.getElementById('histcut-selector').addEventListener('change', (e) => {
-      let pmin = 0
-      let pmax = 100
-
-      switch (e.target.value) {
-        case 'minmax':
-          break
-        case '2pc':
-            pmin = 2.0
-            pmax = 98.0
-          break
-        case '5pc':
-            pmin = 5.0
-            pmax = 95.0
-          break
-      }
-      fetch(`${metadata_endpoint}?pmin=${pmin}&pmax=${pmax}&max_size=256`)
-          .then(res => {
-            if (res.ok) return res.json()
-            throw new Error('Network response was not ok.')
-          })
-          .then(data => {
-            scope.metadata.statistics = data.statistics
-
-            scope.config = {}
-            Object.entries(scope.metadata.statistics).forEach(entry => {
-                scope.config[entry[0]] = { "min": entry[1].percentiles[0], "max": entry[1].percentiles[1] }
-            })
-
-            const rasterType = document.getElementById('toolbar').querySelector(".active").id
-            if (rasterType === "1b") {
-              updateViz()
-            } else {
-              switchViz()
-            }
-          })
-          .catch(err => {
-            console.warn(err)
-          })
-    })
-
-    const bboxPolygon = (bounds)  => {
+    const bboxPolygon = (bounds) => {
         return {
             'type': 'Feature',
             'geometry': {
@@ -861,6 +835,8 @@
     }
 
     const addAOI = (bounds) => {
+      if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
+      if (map.getSource('aoi')) map.removeSource('aoi')
       const geojson = {
           "type": "FeatureCollection",
           "features": [bboxPolygon(bounds)]
@@ -921,7 +897,7 @@
         let values = Object.keys(e.features[0].properties)
         for (var i = 0; i < values.length; i++) {
           let value = e.features[0].properties[values[i]]
-          let key = scope.metadata.band_descriptions[i][1] || scope.metadata.band_descriptions[i][0]
+          let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
           html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
         }
 
@@ -953,7 +929,7 @@
               let values = Object.keys(data.value)
               for (var i = 0; i < values.length; i++) {
                 let value = data.value[values[i]]
-                let key = scope.metadata.band_descriptions[i][1] || scope.metadata.band_descriptions[i][0]
+                let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
                 html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
               }
               html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
@@ -970,29 +946,26 @@
         }
       })
 
-      fetch(`${metadata_endpoint}?max_size=256`)
+      fetch(`${info_endpoint}`)
         .then(res => {
           if (res.ok) return res.json()
           throw new Error('Network response was not ok.')
         })
         .then(data => {
-          scope.metadata = data
           console.log(data)
+          scope.data_type = data.dtype
 
-          //# TODO add byte
-          if (['uint8','int8'].indexOf(scope.metadata.dtype) === -1) {
-            document.getElementById('histcut-selector').querySelector("input[value='minmax']").checked = true
-          }
+          if (['uint8','int8'].indexOf(scope.data_type) === -1) document.getElementById('minmax-data').classList.remove('none')
 
-          scope.config = {}
-          Object.entries(scope.metadata.statistics).forEach(entry => {
-              scope.config[entry[0]] = { "min": entry[1].min, "max": entry[1].max }
-          })
+          const mm = dtype_ranges[scope.data_type]
+          document.getElementById('data-min').value = mm[0]
+          document.getElementById('data-max').value = mm[1]
 
-          const band_descr = scope.metadata.band_descriptions
+          scope.band_descriptions = data.band_descriptions
+          const band_descr = data.band_descriptions
           const nbands = band_descr.length
 
-          //1 band
+          //Populate Band (1b) selector
           const layerList = document.getElementById('layer-selector')
           for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
@@ -1003,7 +976,7 @@
             layerList.appendChild(l)
           }
 
-          //RGB
+          // Populate R/G/B (3b) selectors
           const rList = document.getElementById('r-selector')
           for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
@@ -1046,11 +1019,11 @@
           document.getElementById('hide-arrow').classList.toggle('off')
           document.getElementById('menu').classList.toggle('off')
 
-          const bounds = scope.metadata.bounds
-          const ll = truncate_lnglat(bounds[0], bounds[1])
-          const ur = truncate_lnglat(bounds[2], bounds[3])
+          const ll = truncate_lnglat(data.bounds[0], data.bounds[1])
+          const ur = truncate_lnglat(data.bounds[2], data.bounds[3])
           map.fitBounds([ll, ur])
-          addAOI(bounds)
+
+          addAOI(data.bounds)
 
           if (nbands === 1) {
             document.getElementById('3b').classList.add('disabled')
