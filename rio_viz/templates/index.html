@@ -36,14 +36,14 @@
                 opacity: 0.5;
                 font-size: 45px;
             }
-            .loading-map.off{
+            .loading-map.off {
                 opacity: 0;
                 -o-transition: all .5s ease;
                 -webkit-transition: all .5s ease;
                 -moz-transition: all .5s ease;
                 -ms-transition: all .5s ease;
                 transition: all ease .5s;
-                visibility:hidden;
+                visibility: hidden;
             }
             .middle-center {
                 position: absolute;
@@ -78,7 +78,6 @@
             #toolbar {
               height: 35px;
             }
-
             #toolbar li {
               display: block;
               color: #fff;
@@ -99,35 +98,28 @@
                     -ms-user-select: none;
                         user-select: none;
             }
-
             #toolbar li svg {
               font-size: 25px;
               line-height: 25px;
               padding-bottom: 0;
             }
-
             #toolbar li:hover {
               background-color: #28333b;
             }
-
             #toolbar li.active {
               color: #000;
               background-color: #fff;
             }
-
             #toolbar li.disabled {
                 pointer-events:none;
                 opacity:0.4;
             }
-
             #menu-content section {
               display: none;
             }
-
             #menu-content section.active {
               display: inherit;
             }
-
             #hide-arrow {
               -o-transition: all .5s ease;
               -webkit-transition: all .5s ease;
@@ -135,11 +127,9 @@
               -ms-transition: all .5s ease;
               transition: all ease .5s;
             }
-
             #hide-arrow.off {
               transform: rotate(-180deg);
             }
-
             #btn-hide {
               position: absolute;
               top: 0;
@@ -151,13 +141,11 @@
               color: #28333b;
               background-color: #fff;
             }
-
             #btn-hide:hover {
               color: #fff;
               background-color: #28333b;
               cursor: pointer;
             }
-
             .line-red {
               fill: none;
               stroke: red;
@@ -173,7 +161,6 @@
               stroke: blue;
               stroke-width: 1.5px;
             }
-
             #histogram-table td {
               min-width: 60px;
             }
@@ -188,16 +175,13 @@
                 -ms-transition: all .5s ease;
                 transition: all ease .5s;
               }
-
               .mapboxgl-ctrl-attrib {
                   font-size: 10px;
               }
             }
-
         </style>
     </head>
     <body>
-
     <div id='menu' class='flex-child w240 w360-ml absolute bg-white z2 off'>
 
       <ul id='toolbar' class='grid'>
@@ -238,8 +222,7 @@
             <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers
           </div>
           <div class='select-container wmax-full'>
-            <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'>
-            </select>
+            <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'></select>
             <div class='select-arrow color-black'></div>
           </div>
 
@@ -428,9 +411,11 @@
         params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
       }
       let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
+      if (url_params !== '') url_params = `${url_params}&`
+
 
       const indexes_params = [r, g, b].map(i => `bidx=${i}`).join('&')
-      let url = `${tilejson_endpoint}?${url_params}&${indexes_params}`
+      let url = `${tilejson_endpoint}?${url_params}${indexes_params}`
 
       map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
       map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
@@ -461,15 +446,13 @@
       if (map.getLayer('raster')) map.removeLayer('raster')
       if (map.getLayer('mvt')) map.removeLayer('mvt')
 
-      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const indexes = active_layer.getAttribute('band')
-
       let sMin = parseFloat(document.getElementById('data-min').value)
       const sMax = parseFloat(document.getElementById('data-max').value)
       if (sMin === sMax) sMin = sMin - 0.00001
 
       if (scope.dataset_statistics) addHisto1Band()
 
+      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
       const propName = active_layer.value
       const exag = parseFloat(document.getElementById('ex-value').value)
 
@@ -653,7 +636,6 @@
         }
       }
       table.classList.remove('none')
-
     }
 
     const addHisto1Band = () => {
@@ -835,7 +817,7 @@
       switchViz()
     }
 
-    const bboxPolygon = (bounds)  => {
+    const bboxPolygon = (bounds) => {
         return {
             'type': 'Feature',
             'geometry': {
@@ -853,6 +835,8 @@
     }
 
     const addAOI = (bounds) => {
+      if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
+      if (map.getSource('aoi')) map.removeSource('aoi')
       const geojson = {
           "type": "FeatureCollection",
           "features": [bboxPolygon(bounds)]
