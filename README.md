@@ -82,8 +82,10 @@ rio-viz support multiple/custom reader as long they are subclass of `rio_tiler.i
 
 ```bash
 # MultiFiles
-$ rio viz "cog_band{2,3,4}.tif" \
-  --reader rio_viz.io.reader.MultiFilesReader
+$ rio viz "cog_band{2,3,4}.tif" --reader rio_viz.io.MultiFilesReader
+
+# Simple Mosaic
+$ rio viz "tests/fixtures/mosaic_cog{1,2}.tif" --reader rio_viz.io.MosaicReader
 
 # MultiBandReader
 # Landsat 8 - rio-tiler-pds

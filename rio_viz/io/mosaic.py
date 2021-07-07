@@ -5,8 +5,7 @@ from typing import Any, Dict, List, Type
 import attr
 from braceexpand import braceexpand
 from morecantile import TileMatrixSet
-
-from rio_tiler.constants import WEB_MERCATOR_TMS
+from rio_tiler.constants import WEB_MERCATOR_TMS, BBox
 from rio_tiler.errors import PointOutsideBounds
 from rio_tiler.io import BaseReader, COGReader
 from rio_tiler.models import ImageData, ImageStatistics, Info
@@ -25,8 +24,12 @@ class MosaicReader(BaseReader):
 
     filepath: str = attr.ib()
     reader: Type[BaseReader] = attr.ib(default=COGReader)
-    reader_options: Dict = attr.ib(factory=dict)
     tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
+    bounds: BBox = attr.ib(init=False)
+    minzoom: int = attr.ib(init=False)
+    maxzoom: int = attr.ib(init=False)
+
+    colormap: Dict = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         """Fetch Reference band to get the bounds."""
@@ -38,6 +41,21 @@ class MosaicReader(BaseReader):
         self.minzoom = min([cog.minzoom for cog in self.datasets.values()])
         self.maxzoom = max([cog.maxzoom for cog in self.datasets.values()])
 
+        # check for unique dtype
+        dtypes = {cog.dataset.dtypes[0] for cog in self.datasets.values()}
+        if len(dtypes) > 1:
+            raise Exception("Datasets must be of the same data type.")
+
+        # check for same number of band
+        nbands = {cog.dataset.count for cog in self.datasets.values()}
+        if len(nbands) > 1:
+            raise Exception("Datasets must be have the same number of bands.")
+
+        cmaps = [cog.colormap for cog in self.datasets.values() if cog.colormap]
+        if len(cmaps) > 0:
+            # !!! We take the first one ¡¡¡
+            self.colormap = list(cmaps)[0]
+
         xs = []
         ys = []
         for dataset in self.datasets.values():
@@ -46,16 +64,18 @@ class MosaicReader(BaseReader):
             ys.extend([bottom, top])
         self.bounds = (min(xs), min(ys), max(xs), max(ys))
 
-        # TODO
-        # colormap
-
     def __exit__(self, exc_type, exc_value, traceback):
         """Support using with Context Managers."""
         for dataset in self.datasets.values():
             dataset.close()
 
-    def tile(  # type: ignore
-        self, x: int, y: int, z: int, reverse: bool = False, **kwargs: Any,
+    def tile(
+        self,
+        tile_x: int,
+        tile_y: int,
+        tile_z: int,
+        reverse: bool = False,
+        **kwargs: Any,
     ) -> ImageData:
         """Get Tile"""
         mosaic_assets = (
@@ -64,10 +84,14 @@ class MosaicReader(BaseReader):
             else list(self.datasets.keys())
         )
 
-        def _reader(asset: str, x: int, y: int, z: int, **kwargs: Any) -> ImageData:
-            return self.datasets[asset].tile(x, y, z, **kwargs)
+        def _reader(
+            asset: str, tile_x: int, tile_y: int, tile_z: int, **kwargs: Any
+        ) -> ImageData:
+            return self.datasets[asset].tile(tile_x, tile_y, tile_z, **kwargs)
 
-        return mosaic_reader(mosaic_assets, _reader, x, y, z, threads=0, **kwargs)[0]
+        return mosaic_reader(
+            mosaic_assets, _reader, tile_x, tile_y, tile_z, threads=0, **kwargs
+        )[0]
 
     def point(
         self, lon: float, lat: float, reverse: bool = False, **kwargs: Any,
@@ -97,12 +121,23 @@ class MosaicReader(BaseReader):
 
     def info(self) -> Info:
         """info."""
-        # FOR NOW WE ONLY RETURN VALUE FROM THE FIRST FILE
+        # !!! We return info from the first dataset
+        # Most of the info should be simirlar in other files ¡¡¡
         item = list(self.datasets.keys())[0]
         info_metadata = (
             self.datasets[item]
             .info()
-            .dict(exclude={"bounds", "center", "minzoom", "maxzoom"})
+            .dict(
+                exclude={
+                    "bounds",
+                    "center",
+                    "minzoom",
+                    "maxzoom",
+                    "width",
+                    "height",
+                    "overviews",
+                }
+            )
         )
         spatial_metadata = self.spatial_info.dict()
         return Info(**info_metadata, **spatial_metadata)
@@ -110,16 +145,7 @@ class MosaicReader(BaseReader):
     def stats(
         self, pmin: float = 2.0, pmax: float = 98.0, **kwargs: Any,
     ) -> Dict[str, ImageStatistics]:
-        """Return Dataset's statistics.
-
-        Args:
-            pmin (float, optional): Histogram minimum cut. Defaults to `2.0`.
-            pmax (float, optional): Histogram maximum cut. Defaults to `98.0`.
-
-        Returns:
-            rio_tile.models.ImageStatistics: Dataset statistics.
-
-        """
+        """Return Dataset's statistics."""
         # FOR NOW WE ONLY RETURN VALUE FROM THE FIRST FILE
         item = list(self.datasets.keys())[0]
         return self.datasets[item].stats(pmin, pmax, **kwargs)
