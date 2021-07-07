@@ -5,6 +5,11 @@
 * update code and templates to follow `titiler.core` specs.
 * refactor dependencies to remove bidx in info/metadata/stats (https://github.com/developmentseed/rio-viz/pull/37)
 * refactor UI (https://github.com/developmentseed/rio-viz/pull/38)
+* add simple **MosaicReader** (https://github.com/developmentseed/rio-viz/pull/32)
+
+    ```bash
+    $ rio viz "tests/fixtures/mosaic_cog{1,2}.tif" --reader rio_viz.io.MosaicReader
+    ```
 
 ## 0.6.1 (2021-04-08)
 
