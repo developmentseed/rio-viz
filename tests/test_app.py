@@ -1,5 +1,6 @@
 """tests rio_viz.server."""
 
+import json
 import os
 
 import pytest
@@ -85,13 +86,13 @@ def test_viz():
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/part.png?bbox=-2.00,48.5,-1,49.5&rescale=1,10&colormap_name=cfastie"
+        "/crop/-2.00,48.5,-1,49.5.png?rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/part?bbox=-2.00,48.5,-1,49.5&rescale=1,10&colormap_name=cfastie"
+        "/crop/-2.00,48.5,-1,49.5/100x100.jpeg?&rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
@@ -130,6 +131,49 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     assert response.json() == {"coordinates": [-2.0, 48.0], "value": [110]}
+
+    feat = json.dumps(
+        {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [-1.8511962890624998, 49.296471602658066],
+                        [-2.5213623046875, 48.56388521347092],
+                        [-2.1258544921875, 48.213692646648035],
+                        [-1.4556884765625, 48.356249029540734],
+                        [-1.1590576171875, 48.469279317167164],
+                        [-0.8184814453125, 49.46455408928758],
+                        [-1.4666748046875, 49.55728898983402],
+                        [-1.64794921875, 49.50380954152213],
+                        [-1.8511962890624998, 49.296471602658066],
+                    ]
+                ],
+            },
+        }
+    )
+
+    response = client.post("/crop", data=feat)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+    response = client.post("/crop.jpeg", data=feat)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+
+    response = client.post("/crop/100x100.jpeg", data=feat)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+
+    response = client.post(
+        "/crop.jpeg",
+        params={"bidx": 1, "rescale": "1,10", "colormap_name": "cfastie"},
+        data=feat,
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
 
 
 def test_viz_custom():

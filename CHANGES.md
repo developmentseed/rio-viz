@@ -3,6 +3,8 @@
 
 * add `titiler.core` as dependencies to reduce code duplication.
 * update code and templates to follow `titiler.core` specs.
+* add `/crop.{format}` POST endpoint to get image from polygon shaped GeoJSON (https://github.com/developmentseed/rio-viz/pull/36)
+* rename `/part` to `/crop` to match TiTiler (https://github.com/developmentseed/rio-viz/pull/36)
 * refactor dependencies to remove bidx in info/metadata/stats (https://github.com/developmentseed/rio-viz/pull/37)
 * refactor UI (https://github.com/developmentseed/rio-viz/pull/38)
 * add simple **MosaicReader** (https://github.com/developmentseed/rio-viz/pull/32)

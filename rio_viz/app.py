@@ -8,7 +8,8 @@ from typing import Any, Dict, Optional, Type, Union
 import attr
 import rasterio
 import uvicorn
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
+from geojson_pydantic.features import Feature
 from rio_tiler.io import AsyncBaseReader
 from rio_tiler.models import ImageStatistics, Info, Metadata
 from starlette.concurrency import run_in_threadpool
@@ -349,14 +350,21 @@ class viz:
             description="Return a part of a dataset.",
         )
 
-        @self.router.get(r"/part", **part_params, tags=["API"])
-        @self.router.get(r"/part.{format}", **part_params, tags=["API"])
+        @self.router.get(
+            r"/crop/{minx},{miny},{maxx},{maxy}.{format}", **part_params, tags=["API"],
+        )
+        @self.router.get(
+            r"/crop/{minx},{miny},{maxx},{maxy}/{width}x{height}.{format}",
+            **part_params,
+            tags=["API"],
+        )
         async def part(
-            format: Optional[RasterFormat] = Query(
-                None, description="Output image type."
-            ),
-            bbox: str = Query(
-                ..., description="Bounding box in form of 'minx,miny,maxx,maxy'"
+            minx: float = Path(..., description="Bounding box min X"),
+            miny: float = Path(..., description="Bounding box min Y"),
+            maxx: float = Path(..., description="Bounding box max X"),
+            maxy: float = Path(..., description="Bounding box max Y"),
+            format: RasterFormat = Query(
+                RasterFormat.png, description="Output image type."
             ),
             indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
@@ -365,7 +373,7 @@ class viz:
             render_params: RenderParams = Depends(),
             colormap: ColorMapParams = Depends(),
         ):
-            """Handle /part requests."""
+            """Create image from part of a dataset."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
                 dataset_kwargs = dataset_params.kwargs
                 if self.nodata is not None and not dataset_kwargs.get("nodata"):
@@ -376,11 +384,68 @@ class viz:
                 self._update_layer_params(src_dst, layer_kwargs)
 
                 data = await src_dst.part(
-                    list(map(float, bbox.split(","))),
+                    [minx, miny, maxx, maxy],
                     **indexes_params.kwargs,
                     **img_params.kwargs,
                     **layer_kwargs,
                     **dataset_kwargs,
+                )
+                dst_colormap = getattr(src_dst, "colormap", None)
+
+            image = data.post_process(
+                in_range=render_params.rescale_range,
+                color_formula=render_params.color_formula,
+            )
+
+            content = image.render(
+                img_format=format.driver,
+                colormap=colormap or dst_colormap,
+                add_mask=render_params.return_mask,
+                **format.profile,
+                **render_params.kwargs,
+            )
+
+            return Response(content, media_type=format.mediatype)
+
+        feature_params = dict(
+            responses={
+                200: {
+                    "content": img_media_types,
+                    "description": "Return part of a dataset defined by a geojson feature.",
+                }
+            },
+            response_class=Response,
+            description="Return part of a dataset defined by a geojson feature.",
+        )
+
+        @self.router.post(r"/crop", **feature_params, tags=["API"])
+        @self.router.post(r"/crop.{format}", **feature_params, tags=["API"])
+        @self.router.post(
+            r"/crop/{width}x{height}.{format}", **feature_params, tags=["API"]
+        )
+        async def geojson_part(
+            geom: Feature,
+            format: Optional[RasterFormat] = Query(
+                None, description="Output image type."
+            ),
+            layer_params=Depends(self.layer_dependency),
+            img_params: ImageParams = Depends(),
+            dataset_params: DatasetParams = Depends(),
+            render_params: RenderParams = Depends(),
+            colormap: ColorMapParams = Depends(),
+        ):
+            """Handle /feature requests."""
+            async with self.reader(self.src_path) as src_dst:  # type: ignore
+                dataset_kwargs = dataset_params.kwargs
+                if self.nodata is not None and not dataset_kwargs.get("nodata"):
+                    dataset_kwargs["nodata"] = self.nodata
+
+                # Adapt options for each reader type
+                layer_kwargs = layer_params.kwargs
+                self._update_layer_params(src_dst, layer_kwargs)
+
+                data = await src_dst.feature(
+                    geom.dict(exclude_none=True), **layer_kwargs, **dataset_kwargs
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
