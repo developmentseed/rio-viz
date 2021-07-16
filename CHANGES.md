@@ -1,5 +1,5 @@
 
-## 0.7.0 (TBD)
+## 0.7.0 (2021-07-16)
 
 * add `titiler.core` as dependencies to reduce code duplication.
 * update code and templates to follow `titiler.core` specs.
