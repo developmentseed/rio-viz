@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta charset='utf-8' />
-        <title>rio-viz Multi</title>
+        <title>rio-viz for Asset Reader (STAC)</title>
         <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
 
         <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.6.1/mapbox-gl.js'></script>
@@ -12,19 +12,8 @@
         <script src='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js'></script>
         <script src="https://d3js.org/d3.v4.js"></script>
         <style>
-            body {
-                margin: 0;
-                padding: 0;
-                width: 100%;
-                height: 100%;
-            }
-
-            #map {
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                width: 100%;
-            }
+           body { margin:0; padding:0; width:100%; height:100%;}
+            #map { position:absolute; top:0; bottom:0; width:100%; }
 
             .zoom-info {
                 z-index: 10;
@@ -37,7 +26,6 @@
                 font-size: 12px;
                 color: #000;
             }
-
             .loading-map {
                 position: absolute;
                 width: 100%;
@@ -48,7 +36,6 @@
                 opacity: 0.5;
                 font-size: 45px;
             }
-
             .loading-map.off {
                 opacity: 0;
                 -o-transition: all .5s ease;
@@ -58,7 +45,6 @@
                 transition: all ease .5s;
                 visibility: hidden;
             }
-
             .middle-center {
                 position: absolute;
                 top: 50%;
@@ -89,59 +75,51 @@
                 -ms-transition: all .5s ease;
                 transition: all ease .5s;
             }
-
             #toolbar {
-                height: 20px;
+              height: 35px;
             }
-
             #toolbar li {
-                display: block;
-                color: #000;
-                background-color: #fff;
-                font-weight: 700;
-                font-size: 12px;
-                padding: 3px;
-                height: 100%;
-                width: 100%;
-                text-transform: uppercase;
-                text-align: center;
-                text-decoration: none;
-                outline: 0;
-                cursor: pointer;
-                -webkit-touch-callout: none;
+              display: block;
+              color: #fff;
+              background-color: #556671;
+              font-weight: 700;
+              font-size: 12px;
+              padding: 5px;
+              height: 100%;
+              width: 100%;
+              text-transform: uppercase;
+              text-align: center;
+              text-decoration: none;
+              outline: 0;
+              cursor: pointer;
+              -webkit-touch-callout: none;
                 -webkit-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-                user-select: none;
+                  -moz-user-select: none;
+                    -ms-user-select: none;
+                        user-select: none;
             }
-
             #toolbar li svg {
-                font-size: 16px;
-                line-height: 16px;
+              font-size: 25px;
+              line-height: 25px;
+              padding-bottom: 0;
             }
-
             #toolbar li:hover {
-                background-color: #ddd;
+              background-color: #28333b;
             }
-
             #toolbar li.active {
-                color: #fff;
-                background-color: #000;
+              color: #000;
+              background-color: #fff;
             }
-
             #toolbar li.disabled {
-                pointer-events: none;
-                opacity: 0.4;
+                pointer-events:none;
+                opacity:0.4;
             }
-
             #menu-content section {
                 display: none;
             }
-
             #menu-content section.active {
                 display: inherit;
             }
-
             #hide-arrow {
                 -o-transition: all .5s ease;
                 -webkit-transition: all .5s ease;
@@ -149,16 +127,13 @@
                 -ms-transition: all .5s ease;
                 transition: all ease .5s;
             }
-
             #hide-arrow.off {
                 transform: rotate(-180deg);
             }
-
             input:checked+.toggle {
                 background: #fff;
                 border: #000;
             }
-
             #btn-hide {
                 position: absolute;
                 top: 0;
@@ -170,29 +145,28 @@
                 color: #28333b;
                 background-color: #fff;
             }
-
             #btn-hide:hover {
                 color: #fff;
                 background-color: #28333b;
                 cursor: pointer;
             }
-
             .line-red {
                 fill: none;
                 stroke: red;
                 stroke-width: 1.5px;
             }
-
             .line-green {
                 fill: none;
                 stroke: green;
                 stroke-width: 1.5px;
             }
-
             .line-blue {
                 fill: none;
                 stroke: blue;
                 stroke-width: 1.5px;
+            }
+            #histogram-table td {
+              min-width: 60px;
             }
 
             @media(max-width: 767px) {
@@ -205,7 +179,6 @@
                     -ms-transition: all .5s ease;
                     transition: all ease .5s;
                 }
-
                 .mapboxgl-ctrl-attrib {
                     font-size: 10px;
                 }
@@ -241,8 +214,8 @@
             <div id='menu-content' class='relative'>
 
                 <!-- RGB Selection -->
-                <section id='3b-section' class='px12 pt12 pb6 active'>
-                    <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-layers' /></svg> RGB</div>
+                <section id='3b-section' class='px6 py6 active'>
+                    <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> RGB</div>
                     <div id='rgb-buttons' class='align-center px6 py6'>
                         <div class='select-container'>
                             <select id='r-selector' class='select select--s select--stroke wmax-full color-red'></select>
@@ -259,34 +232,21 @@
                             <div class='select-arrow color-black'></div>
                         </div>
                     </div>
-
-                    <!-- 3b Histogram -->
-                    <div>
-                        <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
-                        <div id="histogram3b" class="w-full h120 h240-ml relative"></div>
-                    </div>
                 </section>
 
                 <!-- 1 Band Selection -->
-                <section id='1b-section' class='px12 pt12 pb6'>
+                <section id='1b-section' class='px6 py6'>
                     <div class='txt-h5 mb6 color-black'>
-                        <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers' /></svg> Layers
+                        <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers
                     </div>
                     <div class='select-container wmax-full'>
                         <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'></select>
                         <div class='select-arrow color-black'></div>
                     </div>
 
-                    <!-- 1b Histogram -->
-                    <div>
-                        <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
-                        <div id="histogram1b" class="w-full h120 h240-ml relative"></div>
-                    </div>
-
                     <!-- Color Map -->
                     <div id='colormap-section'>
-                        <div class='txt-h5 mt6 mb6 color-black'><svg class='icon icon--l inline-block'>
-                                <use xlink:href='#icon-palette' /></svg> Color Map</div>
+                        <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-palette'/></svg> Color Map</div>
                         <div class='select-container wmax-full'>
                             <select id='colormap-selector' class='select select--s select--stroke wmax-full color-black'>
                                 <option value='b&w'>Internal</option>
@@ -307,48 +267,39 @@
                     </div>
                 </section>
 
-                <div id='rescale-section' class='px6 py6'>
-                    <div class='txt-h5 mb6 color-black'>Histogram min/max</div>
-                    <div>
-                        <input id="min-value" class='input input--s wmax60 inline-block align-center color-black' value='0' />
-                        <input id="max-value" class='input input--s wmax60 inline-block align-center color-black' value='1000' />
-                    </div>
+                <!-- Min/Max -->
+                <div id="minmax-data" class='px6 py6 none'>
+                    <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-smooth-ramp'/></svg> Rescale</div>
+                    <input id="data-min" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
+                    <input id="data-max" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
+                    <button id="btn-rescale" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black mt6'>Apply</button>
                 </div>
 
                 <div id='cformula-section' class='px6 py6'>
                     <div class='txt-h5 mb6 color-black'>Color Formula</div>
                     <input id="ColorFormulaValue" class='input input--s w-full color-black' value='' />
+                    <button id="updateColor" class='btn bts--xs btn--stroke bg-darken25-on-hover txt-s color-black mt6'>Apply</button>
                 </div>
-                <button id="updateColor" class='btn bts--xs btn--stroke bg-darken25-on-hover txt-s color-black ml12'>Apply</button>
 
-                <!-- Resampling -->
-                <div class='px12 pt12 pb6'>
-                    <div class='txt-h5 mt6 mb6 color-black'>Resampling Method</div>
-                    <div id='resamp-selector' class='toggle-group bg-gray-faint mt6 mb6' style="line-height: 0">
-                        <label class='toggle-container'>
-                            <input value='bilinear' name='toggle-resamp' type='radio' />
-                            <div title='bilinear' class='toggle color-black color-gray-dark-on-hover'>bilinear</div>
-                        </label>
-                        <label class='toggle-container'>
-                            <input value='cubic' name='toggle-resamp' type='radio' />
-                            <div title='cubic' class='toggle color-black color-gray-dark-on-hover'>cubic</div>
-                        </label>
-                        <label class='toggle-container'>
-                            <input value='nearest' checked='checked' name='toggle-resamp' type='radio' />
-                            <div title='nearest' class='toggle color-black color-gray-dark-on-hover'>nearest</div>
-                        </label>
+                <!-- Histogram -->
+                <div class='px6 py6 w-full'>
+                    <div class='txt-h5 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
+                    <div id='fetch-stats-div' class='w-full align-center'>
+                    <button id="btn-stats" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black mx12 my12'>Get Dataset Statistics</button>
                     </div>
+                    <div id="histogram" class="w-full h120 h240-ml relative loading none"></div>
+                    <table id="histogram-table" class="none"></table>
                 </div>
+
             </div>
-            <button id='btn-hide'><svg id='hide-arrow' class='icon'><use xlink:href='#icon-arrow-right' /></svg></button>
+            <button id='btn-hide'><svg id='hide-arrow' class='icon'><use xlink:href='#icon-arrow-right'/></svg></button>
         </div>
 
         <div id='map'>
             <div id='loader' class="loading-map z3">
                 <div class="middle-center">
                     <div class="round animation-spin animation--infinite animation--speed-1">
-                        <svg class='icon icon--l inline-block'>
-                            <use xlink:href='#icon-satellite' /></svg>
+                        <svg class='icon icon--l inline-block'><use xlink:href='#icon-satellite'/></svg>
                     </div>
                 </div>
             </div>
@@ -356,9 +307,34 @@
         </div>
 
         <script>
-var scope = { assets: [], metadata: {} }
+    var scope = {
+        assets: undefined,
+        info: undefined,
+        metadata: undefined,
+    }
 
-mapboxgl.accessToken = '{{ mapbox_access_token  }}'
+    mapboxgl.accessToken = '{{ mapbox_access_token  }}'
+
+    const tilejson_endpoint = '{{ tilejson_endpoint }}'
+    const info_endpoint = '{{ info_endpoint }}'
+    const stats_endpoint = '{{ stats_endpoint }}'
+    const point_endpoint = '{{ point_endpoint }}'
+
+    const dtype_ranges = {
+      'int8': [-128, 127],
+      'uint8': [0, 255],
+      'uint16': [0, 65535],
+      'int16': [-32768, 32767],
+      'uint32': [0, 4294967295],
+      'int32': [-2147483648, 2147483647],
+      'float32': [-3.4028235e+38, 3.4028235e+38],
+      'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
+    }
+
+    if ('{{ allow_3d }}' !== "True") {
+      document.getElementById('3d-point').classList.add('none')
+      document.getElementById('3d-poly').classList.add('none')
+    }
 
 let style
 if (mapboxgl.accessToken !== '') {
@@ -380,21 +356,16 @@ map.on('zoom', function (e) {
 })
 
 const set1bViz = () => {
-    params = {
-        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
-    }
+    params = {}
 
     const asset = document.getElementById('asset-selector').value
     params.asset = asset
 
-    const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-    const bidx = active_layer.getAttribute('band')
+    const bidx = document.getElementById('layer-selector').value
     params.bidx = bidx
 
-    if (['uint8', 'int8', 'byte'].indexOf(scope.metadata[asset].dtype) === -1) {
-        const minV = parseFloat(document.getElementById('min-value').value)
-        const maxV = parseFloat(document.getElementById('max-value').value)
-        params.rescale = `${minV},${maxV}`
+    if (['uint8','int8'].indexOf(scope.info[asset].dtype) === -1) {
+        params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
     }
 
     if (document.getElementById('ColorFormulaValue').value !== '') {
@@ -405,44 +376,37 @@ const set1bViz = () => {
     if (cmap.value !== 'b&w') params.colormap_name = cmap.value
 
     const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-    let url = `{{ tilejson_endpoint }}?${url_params}`
+    let url = `${tilejson_endpoint}?${url_params}`
 
-    map.addSource('raster', { type: 'raster', url: url, tileSize: 512 })
-    map.addLayer({  id: 'raster', type: 'raster', source: 'raster' })
+    map.addSource('raster', { type: 'raster', url: url , tileSize: 256})
+    map.addLayer({ id: 'raster', type: 'raster', source: 'raster' })
 
     document.getElementById('loader').classList.add('off')
 
-    addHisto1Band()
+    if (scope.metadata) addHisto1Band()
 }
 
 const set3bViz = () => {
-    const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
-    const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
-    const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
+    const r = document.getElementById('r-selector').value
+    const g = document.getElementById('g-selector').value
+    const b = document.getElementById('b-selector').value
 
-    params = {
-        resampling_method: document.getElementById('resamp-selector').querySelector("input[name='toggle-resamp']:checked").value
-    }
-    const composite = document.getElementById("compose-switch").checked
+    params = {}
 
     let assets
     let indexes
-    if (composite === true) {
+    if (document.getElementById("compose-switch").checked === true) {
         assets = [r, g, b]
         indexes = [1]
-        const minV = parseFloat(document.getElementById('min-value').value)
-        const maxV = parseFloat(document.getElementById('max-value').value)
-        params.rescale = `${minV},${maxV}`
+        params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
 
     } else {
         const asset = document.getElementById('asset-selector').value
         assets = [asset]
         indexes = [r, g, b]
 
-        if (['uint8', 'int8', 'byte'].indexOf(scope.metadata[asset].dtype) === -1) {
-            const minV = parseFloat(document.getElementById('min-value').value)
-            const maxV = parseFloat(document.getElementById('max-value').value)
-            params.rescale = `${minV},${maxV}`
+        if (['uint8','int8'].indexOf(scope.info[asset].dtype) === -1) {
+            params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
         }
     }
 
@@ -455,31 +419,31 @@ const set3bViz = () => {
     const indexes_params = indexes.map(i => `bidx=${i}`).join('&')
     let url = `{{ tilejson_endpoint }}?${url_params}&${asset_params}&${indexes_params}`
 
-    map.addSource('raster', { type: 'raster', url: url, tileSize: 512 })
-    map.addLayer({  id: 'raster', type: 'raster', source: 'raster' })
+    map.addSource('raster', { type: 'raster', url: url, tileSize: 256 })
+    map.addLayer({ id: 'raster', type: 'raster', source: 'raster' })
 
     document.getElementById('loader').classList.add('off')
 
-    addHisto3Bands()
+    if (scope.metadata) addHisto3Bands()
 }
 
 const addHisto3Bands = () => {
-    const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
-    const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
-    const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
+      const r = document.getElementById('r-selector').value
+      const g = document.getElementById('g-selector').value
+      const b = document.getElementById('b-selector').value
 
     let rStats
     let gStats
     let bStats
     if (document.getElementById("compose-switch").checked === true) {
-        rStats = scope.metadata[r].statistics[1]
-        gStats = scope.metadata[g].statistics[1]
-        bStats = scope.metadata[b].statistics[1]
+        rStats = scope.metadata[r][1]
+        gStats = scope.metadata[g][1]
+        bStats = scope.metadata[b][1]
     } else {
         const asset = document.getElementById('asset-selector').value
-        rStats = scope.metadata[asset].statistics[r]
-        gStats = scope.metadata[asset].statistics[g]
-        bStats = scope.metadata[asset].statistics[b]
+        rStats = scope.metadata[asset][r]
+        gStats = scope.metadata[asset][g]
+        bStats = scope.metadata[asset][b]
     }
 
     const minV = Math.min(...[rStats.min, gStats.min, bStats.min])
@@ -504,16 +468,16 @@ const addHisto3Bands = () => {
     bCounts = bCounts.map((e) => {return e / sumB * 100})
     const maxH = Math.max(...rCounts, ...gCounts, ...bCounts)
 
-    const bbox = d3.select('#histogram3b').node().getBoundingClientRect()
+    const bbox = d3.select('#histogram').node().getBoundingClientRect()
 
     // set the dimensions and margins of the graph
     const margin = { top: 10, right: 30, bottom: 30, left: 40 }
     const width = bbox.width - margin.left - margin.right
     const height = bbox.height - margin.top - margin.bottom
 
-    d3.select('#histogram3b').selectAll('*').remove()
+    d3.select('#histogram').selectAll('*').remove()
     // append the svg object to the body of the page
-    var svg = d3.select('#histogram3b')
+    var svg = d3.select('#histogram')
     .append('svg')
     .attr('width', width + margin.left + margin.right)
     .attr('height', height + margin.top + margin.bottom)
@@ -571,8 +535,8 @@ const addHisto3Bands = () => {
 
 const addHisto1Band = () => {
     const asset = document.getElementById('asset-selector').value
-    const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-    const stats = scope.metadata[asset].statistics[active_layer.getAttribute('band')]
+    const band = document.getElementById('layer-selector').value
+    const stats = scope.metadata[asset][band]
 
     let counts = stats.histogram[0]
     const sum = counts.reduce(function(a, b){
@@ -582,16 +546,16 @@ const addHisto1Band = () => {
     const maxH = Math.max(...counts)
 
     const values = stats.histogram[1]
-    const bbox = d3.select('#histogram1b').node().getBoundingClientRect()
+    const bbox = d3.select('#histogram').node().getBoundingClientRect()
 
     // set the dimensions and margins of the graph
     const margin = { top: 10, right: 30, bottom: 30, left: 40 }
     const width = bbox.width - margin.left - margin.right
     const height = bbox.height - margin.top - margin.bottom
 
-    d3.select('#histogram1b').selectAll('*').remove()
+    d3.select('#histogram').selectAll('*').remove()
     // append the svg object to the body of the page
-    var svg = d3.select('#histogram1b')
+    var svg = d3.select('#histogram')
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
@@ -612,8 +576,7 @@ const addHisto1Band = () => {
 
     // Y axis: scale and draw:
     var y = d3.scaleLinear().range([height, 0])
-        .domain([0, maxH])
-
+    y.domain([0, maxH])
     svg.append('g').call(d3.axisLeft(y))
 
     const bins = []
@@ -634,7 +597,49 @@ const addHisto1Band = () => {
         .attr('width', 10)
         .attr('height', d => { return height - y(d.count) })
         .style('fill', '#69b3a2')
-}
+        // const data = {
+        //   "Min": stats.min,
+        //   "Max": stats.max,
+        //   "Stddev": stats.std.toFixed(2),
+        // }
+
+        // let table = document.getElementById("histogram-table")
+        // table.innerHTML = ""
+
+        // for (let element of Object.entries(data)) {
+        //   let row = table.insertRow();
+        //   for (key in element) {
+        //     let cell = row.insertCell();
+        //     let text = document.createTextNode(element[key]);
+        //     cell.appendChild(text);
+        //   }
+        // }
+        // table.classList.remove('none')
+    }
+
+    document.getElementById('btn-stats').addEventListener('click', () => {
+      document.getElementById('fetch-stats-div').classList.add('none')
+      document.getElementById('histogram').classList.remove('none')
+      document.getElementById('histogram-table').classList.remove('none')
+
+      fetch(`${stats_endpoint}?max_size=256`)
+        .then(res => {
+          if (res.ok) return res.json()
+          throw new Error('Network response was not ok.')
+        })
+        .then(data => {
+          scope.metadata = data
+          if (document.getElementById('toolbar').querySelector(".active").id === '1b') {
+            addHisto1Band()
+          } else {
+            addHisto3Bands()
+          }
+          document.getElementById('histogram').classList.remove('loading')
+        })
+        .catch(err => {
+          console.warn(err)
+        })
+    })
 
 const switchViz = () => {
     if (map.getLayer('raster')) map.removeLayer('raster')
@@ -658,10 +663,6 @@ document.getElementById('btn-hide').addEventListener('click', () => {
     document.getElementById('menu').classList.toggle('off')
 })
 
-document.getElementById('resamp-selector').addEventListener('change', (e) => {
-    switchViz()
-})
-
 document.getElementById('layer-selector').addEventListener('change', () => {
     switchViz()
 })
@@ -680,6 +681,10 @@ document.getElementById('g-selector').addEventListener('change', () => { switchV
 document.getElementById('b-selector').addEventListener('change', () => { switchViz() })
 
 document.getElementById('colormap-selector').addEventListener('change', () => {
+    switchViz()
+})
+
+document.getElementById('btn-rescale').addEventListener('click', () => {
     switchViz()
 })
 
@@ -814,8 +819,10 @@ const updateUI = () => {
             bList.appendChild(l)
         }
 
-        document.getElementById('rescale-section').classList.remove('none')
-
+        document.getElementById('minmax-data').classList.remove('none')
+        const mm = dtype_ranges[scope.info[scope.assets[0]].dtype]
+        document.getElementById('data-min').value = mm[0]
+        document.getElementById('data-max').value = mm[1]
     } else {
         document.getElementById('1b').classList.remove('disabled')
         document.getElementById("asset-selector").disabled = false
@@ -824,11 +831,12 @@ const updateUI = () => {
         layerList.innerHTML = ''
 
         const asset = document.getElementById('asset-selector').value
-        const metadata = scope.metadata[asset]
-        const band_descr = metadata.band_descriptions
+        const info = scope.info[asset]
+
+        const band_descr = info.band_descriptions
         const nbands = band_descr.length
 
-        //1 band
+        //Populate Band (1b) selector
         for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
             l.setAttribute('band', band_descr[i][0])
@@ -838,7 +846,7 @@ const updateUI = () => {
             layerList.appendChild(l)
         }
 
-        //RGB
+        // Populate R/G/B (3b) selectors
         const rList = document.getElementById('r-selector')
         for (var i = 0; i < nbands; i++) {
             let l = document.createElement('option')
@@ -846,7 +854,7 @@ const updateUI = () => {
             let name = band_descr[i][1] || band_descr[i][0]
             l.setAttribute('name', name)
             l.text = name
-            if (i === 0) l.selected = "selected"
+            if (i === 0) l.selected="selected"
             rList.appendChild(l)
         }
 
@@ -857,7 +865,7 @@ const updateUI = () => {
             let name = band_descr[i][1] || band_descr[i][0]
             l.setAttribute('name', name)
             l.text = name
-            if (i === 1) l.selected = "selected"
+            if (i === 1) l.selected="selected"
             gList.appendChild(l)
         }
 
@@ -869,34 +877,38 @@ const updateUI = () => {
             l.setAttribute('name', name)
             l.text = name
             if (band_descr.length > 2 && i === 2) {
-                l.selected = "selected"
+                l.selected="selected"
             } else {
-                l.selected = "selected"
+                l.selected="selected"
             }
             bList.appendChild(l)
         }
 
-        if (['uint8', 'int8', 'byte'].indexOf(metadata.dtype) === -1) {
-            document.getElementById('rescale-section').classList.remove('none')
+        if (['uint8','int8'].indexOf(info.dtype) === -1) {
+            document.getElementById('minmax-data').classList.remove('none')
         } else {
-            document.getElementById('rescale-section').classList.add('none')
+            document.getElementById('minmax-data').classList.add('none')
         }
+        const mm = dtype_ranges[scope.info[asset].dtype]
+        document.getElementById('data-min').value = mm[0]
+        document.getElementById('data-max').value = mm[1]
 
-        const bounds = metadata.bounds
-        map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
-        addAOI(bounds)
+        const ll = truncate_lnglat(info.bounds[0], info.bounds[1])
+        const ur = truncate_lnglat(info.bounds[2], info.bounds[3])
+
+        map.fitBounds([ll, ur])
+        addAOI(info.bounds)
 
         if (nbands === 1) {
             document.getElementById('3b').classList.add('disabled')
             document.getElementById('3b').classList.remove('active')
-            document.getElementById('3b-section').classList.remove('active')
+            document.getElementById('3b-section').classList.toggle('active')
             document.getElementById('1b').classList.add('active')
-            document.getElementById('1b-section').classList.add('active')
+            document.getElementById('1b-section').classList.toggle('active')
         } else {
             document.getElementById('3b').classList.remove('disabled')
         }
     }
-
     switchViz()
 }
 
@@ -939,18 +951,19 @@ map.on('load', () => {
     //})
 
 
-    fetch('{{ metadata_endpoint }}?max_size=256')
+    fetch(`${info_endpoint}`)
         .then(res => {
             if (res.ok) return res.json()
             throw new Error('Network response was not ok.')
         })
         .then(data => {
+            console.log(data)
             document.getElementById('hide-arrow').classList.toggle('off')
             document.getElementById('menu').classList.toggle('off')
             document.getElementById('loader').classList.toggle('off')
 
             scope.assets =  Object.entries(data).map((e) => {return e[0]})
-            scope.metadata = data
+            scope.info = data
 
             const assetList = document.getElementById('asset-selector')
             for (var i = 0; i < scope.assets.length; i++) {
@@ -960,7 +973,6 @@ map.on('load', () => {
                 l.text = scope.assets[i]
                 assetList.appendChild(l)
             }
-
         })
         .then(() => {
             updateUI()

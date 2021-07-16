@@ -31,9 +31,6 @@ class AssetsParams(DefaultDependency):
     asset: Optional[List[str]] = Query(
         None, title="Asset indexes", description="asset names."
     )
-    bidx: Optional[List[int]] = Query(
-        None, title="Band indexes", description="band indexes",
-    )
 
     default_assets: Optional[List[str]] = field(init=False)
 
@@ -41,8 +38,6 @@ class AssetsParams(DefaultDependency):
         """Post Init."""
         if self.asset or self.default_assets:
             self.kwargs["assets"] = self.asset or self.default_assets
-        if self.bidx is not None:
-            self.kwargs["indexes"] = self.bidx
 
 
 # Dependencies for  MultiBandReader
@@ -53,9 +48,6 @@ class BandsParams(DefaultDependency):
     band: Optional[List[str]] = Query(
         None, title="bands names", description="bands names.",
     )
-    bidx: Optional[List[int]] = Query(
-        [1], title="Band indexes", description="band indexes",
-    )
 
     default_bands: Optional[List[str]] = field(init=False)
 
@@ -63,5 +55,3 @@ class BandsParams(DefaultDependency):
         """Post Init."""
         if self.band or self.default_bands:
             self.kwargs["bands"] = self.band or self.default_bands
-        if self.bidx is not None:
-            self.kwargs["indexes"] = self.bidx

@@ -86,13 +86,13 @@ def test_viz():
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/part.png?bbox=-2.00,48.5,-1,49.5&rescale=1,10&colormap_name=cfastie"
+        "/crop/-2.00,48.5,-1,49.5.png?rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/part?bbox=-2.00,48.5,-1,49.5&rescale=1,10&colormap_name=cfastie"
+        "/crop/-2.00,48.5,-1,49.5/100x100.jpeg?&rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
@@ -155,16 +155,20 @@ def test_viz():
         }
     )
 
-    response = client.post("/feature", data=feat)
+    response = client.post("/crop", data=feat)
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.post("/feature.jpeg", data=feat)
+    response = client.post("/crop.jpeg", data=feat)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+
+    response = client.post("/crop/100x100.jpeg", data=feat)
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
 
     response = client.post(
-        "/feature.jpeg",
+        "/crop.jpeg",
         params={"bidx": 1, "rescale": "1,10", "colormap_name": "cfastie"},
         data=feat,
     )
