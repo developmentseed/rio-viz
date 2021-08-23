@@ -1,4 +1,8 @@
 
+## 0.7.1 (2021-08-23)
+
+* fix float parsing when datatype is float32 (https://github.com/developmentseed/rio-viz/pull/40)
+
 ## 0.7.0 (2021-07-16)
 
 * add `titiler.core` as dependencies to reduce code duplication.

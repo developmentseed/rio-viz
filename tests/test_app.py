@@ -76,6 +76,13 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
+    response = client.get(
+        "/preview?rescale=-3.4028235e+38,3.4028235e+38&colormap_name=cfastie"
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["cache-control"] == "no-cache"
+
     response = client.get("/preview?rescale=1,10&colormap_name=cfastie")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
