@@ -31,8 +31,8 @@ $ pip install rio-viz
 with 3d feature
 
 ```bash
-# 3d visualization features is optional, you'll need to have `cython==0.28` installed before being able to install `rio-viz["mvt"]`
-$ pip install -U pip cython==0.28
+# 3d visualization features is optional
+$ pip install -U pip
 $ pip install rio-viz["mvt"]
 ```
 
