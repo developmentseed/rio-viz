@@ -1,4 +1,8 @@
 
+## 0.7.1 (2021-09-17)
+
+* do not rescale data if there is a colormap
+
 ## 0.7.0 (2021-07-16)
 
 * add `titiler.core` as dependencies to reduce code duplication.
