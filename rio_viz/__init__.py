@@ -3,4 +3,4 @@
 from rio_viz.app import viz  # noqa
 from rio_viz.compat import AsyncReader  # noqa
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
