@@ -1,9 +1,9 @@
 
-## 0.7.1 (2021-09-17)
+## 0.7.2 (2021-09-17)
 
 * do not rescale data if there is a colormap
 
-## 0.7.0 (2021-07-16)
+## 0.7.1 (2021-07-16)
 
 * add `titiler.core` as dependencies to reduce code duplication.
 * update code and templates to follow `titiler.core` specs.
@@ -16,6 +16,10 @@
     ```bash
     $ rio viz "tests/fixtures/mosaic_cog{1,2}.tif" --reader rio_viz.io.MosaicReader
     ```
+
+## 0.7.0
+
+* Not released on pypi
 
 ## 0.6.1 (2021-04-08)
 
