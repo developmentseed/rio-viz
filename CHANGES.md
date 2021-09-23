@@ -1,3 +1,6 @@
+## 0.7.2 (2021-09-23)
+
+* use titiler custom JSONResponse to encode nan/inf/-inf values in response
 
 ## 0.7.1 (2021-09-17)
 
