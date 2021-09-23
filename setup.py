@@ -10,7 +10,7 @@ inst_reqs = [
     "braceexpand",
     "rio-tiler>=2.1,<3.0",
     "rio-cogeo>=2.2,<3.0",
-    "titiler.core>=0.3.2,<0.4",
+    "titiler.core>=0.3.10,<0.4",
     "uvicorn",
 ]
 

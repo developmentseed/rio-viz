@@ -33,7 +33,7 @@ from titiler.core.dependencies import (
     RenderParams,
 )
 from titiler.core.models.mapbox import TileJSON
-from titiler.core.resources.responses import XMLResponse
+from titiler.core.resources.responses import JSONResponse, XMLResponse
 
 try:
     from rio_tiler_mvt import pixels_encoder  # noqa
@@ -173,6 +173,7 @@ class viz:
             response_model=Dict[str, Info] if self.reader_type == "assets" else Info,
             response_model_exclude={"minzoom", "maxzoom", "center"},
             response_model_exclude_none=True,
+            response_class=JSONResponse,
             responses={200: {"description": "Return the info of the COG."}},
             tags=["API"],
         )
@@ -194,6 +195,7 @@ class viz:
             else Dict[str, ImageStatistics],
             response_model_exclude={"minzoom", "maxzoom", "center"},
             response_model_exclude_none=True,
+            response_class=JSONResponse,
             responses={200: {"description": "Return the statistics of the COG."}},
             tags=["API"],
         )
@@ -228,6 +230,7 @@ class viz:
             else Metadata,
             response_model_exclude={"minzoom", "maxzoom", "center"},
             response_model_exclude_none=True,
+            response_class=JSONResponse,
             responses={200: {"description": "Return the metadata of the COG."}},
             tags=["API"],
         )
@@ -257,6 +260,7 @@ class viz:
         @self.router.get(
             "/point",
             responses={200: {"description": "Return a point value."}},
+            response_class=JSONResponse,
             tags=["API"],
         )
         async def point(
