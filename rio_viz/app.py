@@ -3,7 +3,7 @@
 import pathlib
 import urllib.parse
 from functools import partial
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 import attr
 import rasterio
@@ -11,26 +11,32 @@ import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
 from geojson_pydantic.features import Feature
 from rio_tiler.io import AsyncBaseReader
-from rio_tiler.models import ImageStatistics, Info, Metadata
+from rio_tiler.models import BandStatistics, Info
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
+from starlette_cramjam.middleware import CompressionMiddleware
 
-from rio_viz.dependencies import AssetsParams, BandsParams, IndexesParams
 from rio_viz.resources.enums import RasterFormat, VectorTileFormat, VectorTileType
 
 from titiler.core.dependencies import (
+    AssetsBidxParams,
+    AssetsParams,
+    BandsExprParamsOptional,
+    BandsParams,
+    BidxExprParams,
     ColorMapParams,
     DatasetParams,
     DefaultDependency,
+    HistogramParams,
     ImageParams,
-    MetadataParams,
-    RenderParams,
+    ImageRenderingParams,
+    PostProcessParams,
+    StatisticsParams,
 )
 from titiler.core.models.mapbox import TileJSON
 from titiler.core.resources.responses import JSONResponse, XMLResponse
@@ -79,16 +85,14 @@ class viz:
 
     app: FastAPI = attr.ib(default=attr.Factory(FastAPI))
 
-    token: Optional[str] = attr.ib(default=None)
     port: int = attr.ib(default=8080)
     host: str = attr.ib(default="127.0.0.1")
-    style: str = attr.ib(default="satellite")
     config: Dict = attr.ib(default=dict)
 
     minzoom: Optional[int] = attr.ib(default=None)
     maxzoom: Optional[int] = attr.ib(default=None)
 
-    layers: Optional[str] = attr.ib(default=None)
+    layers: Optional[List[str]] = attr.ib(default=None)
     nodata: Optional[Union[str, int, float]] = attr.ib(default=None)
 
     # cog / bands / assets
@@ -96,6 +100,7 @@ class viz:
 
     router: Optional[APIRouter] = attr.ib(init=False)
 
+    idx_dependency: Type[DefaultDependency] = attr.ib(init=False)
     layer_dependency: Type[DefaultDependency] = attr.ib(init=False)
 
     @reader_type.validator
@@ -110,21 +115,16 @@ class viz:
 
         if self.reader_type == "cog":
             # For simple BaseReader (e.g COGReader) we don't add more dependencies.
-            self.layer_dependency = DefaultDependency
+            self.info_dependency = DefaultDependency
+            self.layer_dependency = BidxExprParams
 
         elif self.reader_type == "bands":
-            self.layer_dependency = type(
-                "BandsParams",
-                (BandsParams,),
-                {"default_bands": self.layers.split(",") if self.layers else None},
-            )
+            self.info_dependency = BandsParams
+            self.layer_dependency = BandsExprParamsOptional
 
         elif self.reader_type == "assets":
-            self.layer_dependency = type(
-                "AssetsParams",
-                (AssetsParams,),
-                {"default_assets": self.layers.split(",") if self.layers else None},
-            )
+            self.info_dependency = AssetsParams
+            self.layer_dependency = AssetsBidxParams
 
         self.register_middleware()
         self.register_routes()
@@ -133,24 +133,41 @@ class viz:
     def register_middleware(self):
         """Register Middleware to the FastAPI app."""
         self.app.add_middleware(
+            CompressionMiddleware,
+            minimum_size=0,
+            exclude_mediatype={
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/jp2",
+                "image/webp",
+            },
+        )
+        self.app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
             allow_credentials=True,
             allow_methods=["GET"],
             allow_headers=["*"],
         )
-        self.app.add_middleware(GZipMiddleware, minimum_size=0)
         self.app.add_middleware(CacheControlMiddleware)
 
-    def _update_layer_params(self, src_dst, options: Dict[str, Any]):
+    def _update_params(self, src_dst, options: Type[DefaultDependency]):
         """Create Reader options."""
-        assets = getattr(src_dst, "assets", None)
-        if assets and not options.get("assets"):
-            options["assets"] = assets
+        if not getattr(options, "expression", None):
+            if self.reader_type == "bands":
+                # get default bands from self.layers or reader.bands
+                bands = self.layers or getattr(src_dst, "bands", None)
+                # check if bands is not in options and overwrite
+                if bands and not getattr(options, "bands", None):
+                    options.bands = bands
 
-        bands = getattr(src_dst, "bands", None)
-        if bands and not options.get("bands"):
-            options["bands"] = bands
+            if self.reader_type == "assets":
+                # get default assets from self.layers or reader.assets
+                assets = self.layers or getattr(src_dst, "assets", None)
+                # check if assets is not in options and overwrite
+                if assets and not getattr(options, "assets", None):
+                    options.assets = assets
 
     def register_routes(self):  # noqa
         """Register routes to the FastAPI app."""
@@ -177,84 +194,45 @@ class viz:
             responses={200: {"description": "Return the info of the COG."}},
             tags=["API"],
         )
-        async def info(layer_params=Depends(self.layer_dependency)):
+        async def info(params=Depends(self.info_dependency)):
             """Handle /info requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-
+            async with self.reader(self.src_path) as src_dst:
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
-
-                return await src_dst.info(**layer_kwargs)
+                self._update_params(src_dst, params)
+                return await src_dst.info(**params)
 
         @self.router.get(
-            "/stats",
+            "/statistics",
             # for MultiBaseReader the output in `Dict[str, Dict[str, ImageStatistics]]`
-            response_model=Dict[str, Dict[str, ImageStatistics]]
+            response_model=Dict[str, Dict[str, BandStatistics]]
             if self.reader_type == "assets"
-            else Dict[str, ImageStatistics],
-            response_model_exclude={"minzoom", "maxzoom", "center"},
+            else Dict[str, BandStatistics],
             response_model_exclude_none=True,
             response_class=JSONResponse,
             responses={200: {"description": "Return the statistics of the COG."}},
             tags=["API"],
         )
-        async def stats(
-            metadata_params: MetadataParams = Depends(),
+        async def statistics(
             layer_params=Depends(self.layer_dependency),
+            image_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
+            stats_params: StatisticsParams = Depends(),
+            histogram_params: HistogramParams = Depends(),
         ):
             """Handle /stats requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
+            async with self.reader(self.src_path) as src_dst:
+                if self.nodata is not None and dataset_params.nodata is not None:
+                    dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
+                self._update_params(src_dst, layer_params)
 
-                return await src_dst.stats(
-                    metadata_params.pmin,
-                    metadata_params.pmax,
-                    **layer_kwargs,
-                    **dataset_kwargs,
-                    **metadata_params.kwargs,
-                )
-
-        @self.router.get(
-            "/metadata",
-            # for MultiBaseReader the output in `Dict[str, Metadata]`
-            response_model=Dict[str, Metadata]
-            if self.reader_type == "assets"
-            else Metadata,
-            response_model_exclude={"minzoom", "maxzoom", "center"},
-            response_model_exclude_none=True,
-            response_class=JSONResponse,
-            responses={200: {"description": "Return the metadata of the COG."}},
-            tags=["API"],
-        )
-        async def metadata(
-            metadata_params: MetadataParams = Depends(),
-            layer_params=Depends(self.layer_dependency),
-            dataset_params: DatasetParams = Depends(),
-        ):
-            """Handle /metadata requests."""
-            async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
-
-                # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
-
-                return await src_dst.metadata(
-                    metadata_params.pmin,
-                    metadata_params.pmax,
-                    **layer_kwargs,
-                    **dataset_kwargs,
-                    **metadata_params.kwargs,
+                return await src_dst.statistics(
+                    **layer_params,
+                    **dataset_params,
+                    **image_params,
+                    **stats_params,
+                    hist_options={**histogram_params},
                 )
 
         @self.router.get(
@@ -267,26 +245,26 @@ class viz:
             coordinates: str = Query(
                 ..., description="Coma (',') delimited lon,lat coordinates"
             ),
-            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
         ):
             """Handle /point requests."""
             lon, lat = list(map(float, coordinates.split(",")))
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
+                if self.nodata is not None and dataset_params.nodata is not None:
+                    dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
+                self._update_params(src_dst, layer_params)
 
                 results = await src_dst.point(
-                    lon, lat, **indexes_params.kwargs, **layer_kwargs, **dataset_kwargs,
+                    lon,
+                    lat,
+                    **layer_params,
+                    **dataset_params,
                 )
 
-            return {"coordinates": [lon, lat], "value": results}
+            return {"coordinates": [lon, lat], "values": results}
 
         preview_params = dict(
             responses={
@@ -300,45 +278,38 @@ class viz:
         @self.router.get(r"/preview.{format}", **preview_params, tags=["API"])
         async def preview(
             format: Optional[RasterFormat] = None,
-            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
-            render_params: RenderParams = Depends(),
+            render_params: ImageRenderingParams = Depends(),
+            postprocess_params: PostProcessParams = Depends(),
             colormap: ColorMapParams = Depends(),
         ):
             """Handle /preview requests."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
+                if self.nodata is not None and dataset_params.nodata is not None:
+                    dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
+                self._update_params(src_dst, layer_params)
 
                 data = await src_dst.preview(
-                    **img_params.kwargs,
-                    **indexes_params.kwargs,
-                    **layer_kwargs,
-                    **dataset_kwargs,
+                    **layer_params,
+                    **dataset_params,
+                    **img_params,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if not format:
                 format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
 
-            image = data.post_process(
-                in_range=render_params.rescale_range,
-                color_formula=render_params.color_formula,
-            )
+            image = data.post_process(**postprocess_params)
 
             content = image.render(
                 img_format=format.driver,
                 colormap=colormap or dst_colormap,
-                add_mask=render_params.return_mask,
                 **format.profile,
-                **render_params.kwargs,
+                **render_params,
             )
 
             return Response(content, media_type=format.mediatype)
@@ -355,7 +326,9 @@ class viz:
         )
 
         @self.router.get(
-            r"/crop/{minx},{miny},{maxx},{maxy}.{format}", **part_params, tags=["API"],
+            r"/crop/{minx},{miny},{maxx},{maxy}.{format}",
+            **part_params,
+            tags=["API"],
         )
         @self.router.get(
             r"/crop/{minx},{miny},{maxx},{maxy}/{width}x{height}.{format}",
@@ -370,43 +343,36 @@ class viz:
             format: RasterFormat = Query(
                 RasterFormat.png, description="Output image type."
             ),
-            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
-            render_params: RenderParams = Depends(),
+            render_params: ImageRenderingParams = Depends(),
+            postprocess_params: PostProcessParams = Depends(),
             colormap: ColorMapParams = Depends(),
         ):
             """Create image from part of a dataset."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
+                if self.nodata is not None and dataset_params.nodata is not None:
+                    dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
+                self._update_params(src_dst, layer_params)
 
                 data = await src_dst.part(
                     [minx, miny, maxx, maxy],
-                    **indexes_params.kwargs,
-                    **img_params.kwargs,
-                    **layer_kwargs,
-                    **dataset_kwargs,
+                    **layer_params,
+                    **dataset_params,
+                    **img_params,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
-            image = data.post_process(
-                in_range=render_params.rescale_range,
-                color_formula=render_params.color_formula,
-            )
+            image = data.post_process(**postprocess_params)
 
             content = image.render(
                 img_format=format.driver,
                 colormap=colormap or dst_colormap,
-                add_mask=render_params.return_mask,
                 **format.profile,
-                **render_params.kwargs,
+                **render_params,
             )
 
             return Response(content, media_type=format.mediatype)
@@ -435,38 +401,33 @@ class viz:
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
-            render_params: RenderParams = Depends(),
+            render_params: ImageRenderingParams = Depends(),
+            postprocess_params: PostProcessParams = Depends(),
             colormap: ColorMapParams = Depends(),
         ):
             """Handle /feature requests."""
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
+                if self.nodata is not None and dataset_params.nodata is not None:
+                    dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
+                self._update_params(src_dst, layer_params)
 
                 data = await src_dst.feature(
-                    geom.dict(exclude_none=True), **layer_kwargs, **dataset_kwargs
+                    geom.dict(exclude_none=True), **layer_params, **dataset_params
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if not format:
                 format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
 
-            image = data.post_process(
-                in_range=render_params.rescale_range,
-                color_formula=render_params.color_formula,
-            )
+            image = data.post_process(**postprocess_params)
 
             content = image.render(
                 img_format=format.driver,
                 colormap=colormap or dst_colormap,
-                add_mask=render_params.return_mask,
                 **format.profile,
-                **render_params.kwargs,
+                **render_params,
             )
 
             return Response(content, media_type=format.mediatype)
@@ -489,13 +450,14 @@ class viz:
             x: int,
             y: int,
             format: Optional[TileFormat] = None,
-            indexes_params: IndexesParams = Depends(),
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
-            render_params: RenderParams = Depends(),
+            render_params: ImageRenderingParams = Depends(),
+            postprocess_params: PostProcessParams = Depends(),
             colormap: ColorMapParams = Depends(),
             feature_type: Optional[VectorTileType] = Query(
-                None, title="Feature type (Only for MVT)",
+                None,
+                title="Feature type (Only for MVT)",
             ),
         ):
             """Handle /tiles requests."""
@@ -505,27 +467,20 @@ class viz:
                 tilesize = 128
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                dataset_kwargs = dataset_params.kwargs
-                if self.nodata is not None and not dataset_kwargs.get("nodata"):
-                    dataset_kwargs["nodata"] = self.nodata
+                if self.nodata is not None and dataset_params.nodata is not None:
+                    dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
-                layer_kwargs = layer_params.kwargs
-                self._update_layer_params(src_dst, layer_kwargs)
+                self._update_params(src_dst, layer_params)
 
                 tile_data = await src_dst.tile(
                     x,
                     y,
                     z,
                     tilesize=tilesize,
-                    **indexes_params.kwargs,
-                    **dataset_kwargs,
-                    **layer_kwargs,
+                    **layer_params,
+                    **dataset_params,
                 )
-
-                bandnames = layer_kwargs.get(
-                    "bands", layer_kwargs.get("assets", None)
-                ) or [f"{ix + 1}" for ix in range(tile_data.count)]
 
                 dst_colormap = getattr(src_dst, "colormap", None)
 
@@ -539,14 +494,15 @@ class viz:
 
                 if not feature_type:
                     raise HTTPException(
-                        status_code=500, detail="missing feature_type for vector tile.",
+                        status_code=500,
+                        detail="missing feature_type for vector tile.",
                     )
                 _mvt_encoder = partial(run_in_threadpool, pixels_encoder)
 
                 content = await _mvt_encoder(
                     tile_data.data,
                     tile_data.mask,
-                    bandnames,
+                    tile_data.band_names,
                     feature_type=feature_type.value,
                 )  # type: ignore
 
@@ -557,17 +513,13 @@ class viz:
                         RasterFormat.jpeg if tile_data.mask.all() else RasterFormat.png
                     )
 
-                image = tile_data.post_process(
-                    in_range=render_params.rescale_range,
-                    color_formula=render_params.color_formula,
-                )
+                image = tile_data.post_process(**postprocess_params)
 
                 content = image.render(
                     img_format=format.driver,
                     colormap=colormap or dst_colormap,
-                    add_mask=render_params.return_mask,
                     **format.profile,
-                    **render_params.kwargs,
+                    **render_params,
                 )
 
             return Response(content, media_type=format.mediatype)
@@ -582,10 +534,10 @@ class viz:
         async def tilejson(
             request: Request,
             tile_format: Optional[TileFormat] = None,
-            indexes_params: IndexesParams = Depends(),  # noqa
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
-            render_params: RenderParams = Depends(),  # noqa
+            render_params: ImageRenderingParams = Depends(),  # noqa
+            postprocess_params: PostProcessParams = Depends(),  # noqa
             colormap: ColorMapParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
@@ -607,14 +559,12 @@ class viz:
                 tile_url += f"?{urllib.parse.urlencode(qs)}"
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                bounds = src_dst.bounds
-                center = src_dst.center
+                bounds = src_dst.geographic_bounds
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
 
             return dict(
                 bounds=bounds,
-                center=center,
                 minzoom=minzoom,
                 maxzoom=maxzoom,
                 name="rio-viz",
@@ -630,10 +580,10 @@ class viz:
             tile_format: RasterFormat = Query(
                 RasterFormat.png, description="Output image type. Default is png."
             ),
-            indexes_params: IndexesParams = Depends(),  # noqa
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
-            render_params: RenderParams = Depends(),  # noqa
+            render_params: ImageRenderingParams = Depends(),  # noqa
+            postprocess_params: PostProcessParams = Depends(),  # noqa
             colormap: ColorMapParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
@@ -663,7 +613,7 @@ class viz:
                 tiles_endpoint += f"?{urllib.parse.urlencode(qs)}"
 
             async with self.reader(self.src_path) as src_dst:  # type: ignore
-                bounds = src_dst.bounds
+                bounds = src_dst.geographic_bounds
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
 
@@ -714,11 +664,9 @@ class viz:
                 context={
                     "request": request,
                     "tilejson_endpoint": request.url_for("tilejson"),
-                    "stats_endpoint": request.url_for("stats"),
+                    "stats_endpoint": request.url_for("statistics"),
                     "info_endpoint": request.url_for("info"),
                     "point_endpoint": request.url_for("point"),
-                    "mapbox_access_token": self.token,
-                    "mapbox_style": self.style,
                     "allow_3d": has_mvt,
                 },
                 media_type="text/html",

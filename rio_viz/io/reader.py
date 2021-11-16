@@ -1,37 +1,35 @@
 """rio-viz multifile reader."""
 
-from typing import Dict, Type
+from typing import Any, Dict, List, Type
 
 import attr
 from braceexpand import braceexpand
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.errors import InvalidBandName
-from rio_tiler.io import BaseReader, COGReader, MultiBandReader
+from rio_tiler.io import BaseReader, COGReader, MultiBandReader, MultiBaseReader
 
 
 @attr.s
-class MultiFilesReader(MultiBandReader):
-    """Multiple Files reader.
+class MultiFilesBandsReader(MultiBandReader):
+    """Multiple Files as Bands."""
 
-    Args:
-        filepath (str): Brace Expandable path (e.g: band{1,2,3}.tif).
-
-    """
-
-    filepath: str = attr.ib()
+    input: Any = attr.ib()
     reader: Type[BaseReader] = attr.ib(default=COGReader)
+
     reader_options: Dict = attr.ib(factory=dict)
     tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
 
+    files: List[str] = attr.ib(init=False)
+
     def __attrs_post_init__(self):
         """Fetch Reference band to get the bounds."""
-        self.files = list(braceexpand(self.filepath))
-        self.indexes = [ix + 1 for ix in range(len(self.files))]
-        self.bands = [f"file{ix}" for ix in self.indexes]
+        self.files = list(braceexpand(self.input))
+        self.bands = [f"b{ix + 1}" for ix in range(len(self.files))]
 
         with self.reader(self.files[0], tms=self.tms, **self.reader_options) as cog:
             self.bounds = cog.bounds
+            self.crs = cog.crs
             self.minzoom = cog.minzoom
             self.maxzoom = cog.maxzoom
 
@@ -41,4 +39,36 @@ class MultiFilesReader(MultiBandReader):
             raise InvalidBandName(f"{band} is not valid")
 
         index = self.bands.index(band)
+        return self.files[index]
+
+
+@attr.s
+class MultiFilesAssetsReader(MultiBaseReader):
+    """Multiple Files as Assets."""
+
+    input: Any = attr.ib()
+    reader: Type[BaseReader] = attr.ib(default=COGReader)
+
+    reader_options: Dict = attr.ib(factory=dict)
+    tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
+
+    files: List[str] = attr.ib(init=False)
+
+    def __attrs_post_init__(self):
+        """Fetch Reference band to get the bounds."""
+        self.files = list(braceexpand(self.input))
+        self.assets = [f"asset{ix + 1}" for ix in range(len(self.files))]
+
+        with self.reader(self.files[0], tms=self.tms, **self.reader_options) as cog:
+            self.bounds = cog.bounds
+            self.crs = cog.crs
+            self.minzoom = cog.minzoom
+            self.maxzoom = cog.maxzoom
+
+    def _get_asset_url(self, asset: str) -> str:
+        """Validate band's name and return band's url."""
+        if asset not in self.assets:
+            raise InvalidBandName(f"{asset} is not valid")
+
+        index = self.assets.index(asset)
         return self.files[index]

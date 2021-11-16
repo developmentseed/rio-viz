@@ -311,399 +311,334 @@
     </div>
 
     <script>
-    var scope = {
-      dataset_statistics: undefined,
-      data_type: undefined,
-      band_descriptions: undefined
-    }
+var scope = {
+  dataset_statistics: undefined,
+  data_type: undefined,
+  band_descriptions: undefined
+}
 
-    mapboxgl.accessToken = '{{ mapbox_access_token  }}'
+mapboxgl.accessToken = ''
 
-    const tilejson_endpoint = '{{ tilejson_endpoint }}'
-    const info_endpoint = '{{ info_endpoint }}'
-    const stats_endpoint = '{{ stats_endpoint }}'
-    const point_endpoint = '{{ point_endpoint }}'
+const tilejson_endpoint = '{{ tilejson_endpoint }}'
+const info_endpoint = '{{ info_endpoint }}'
+const stats_endpoint = '{{ stats_endpoint }}'
+const point_endpoint = '{{ point_endpoint }}'
 
-    const dtype_ranges = {
-      'int8': [-128, 127],
-      'uint8': [0, 255],
-      'uint16': [0, 65535],
-      'int16': [-32768, 32767],
-      'uint32': [0, 4294967295],
-      'int32': [-2147483648, 2147483647],
-      'float32': [-3.4028235e+38, 3.4028235e+38],
-      'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
-    }
+const dtype_ranges = {
+  'int8': [-128, 127],
+  'uint8': [0, 255],
+  'uint16': [0, 65535],
+  'int16': [-32768, 32767],
+  'uint32': [0, 4294967295],
+  'int32': [-2147483648, 2147483647],
+  'float32': [-3.4028235e+38, 3.4028235e+38],
+  'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
+}
 
-    if ('{{ allow_3d }}' !== "True") {
-      document.getElementById('3d-point').classList.add('none')
-      document.getElementById('3d-poly').classList.add('none')
-    }
+if ('{{ allow_3d }}' !== "True") {
+  document.getElementById('3d-point').classList.add('none')
+  document.getElementById('3d-poly').classList.add('none')
+}
 
-    let style
-    if (mapboxgl.accessToken !== '') {
-      style = 'mapbox://styles/mapbox/{{ mapbox_style }}-v9'
-    } else {
-      style = { version: 8, sources: {}, layers: [] }
-    }
-
-    var map = new mapboxgl.Map({
-        container: 'map',
-        style: style,
-        center: [0, 0],
-        zoom: 1
-    })
-
-    map.on('zoom', function (e) {
-      const z = (map.getZoom()).toString().slice(0, 6)
-      document.getElementById('zoom').textContent = z
-    })
-
-    const set1bViz = () => {
-      params = {}
-      const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
-      switch (vizType) {
-        case 'raster':
-          params.band = document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")
-
-          if (['uint8','int8'].indexOf(scope.data_type) === -1) {
-            params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
-          }
-
-          const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
-          if (cmap.value !== 'b&w') params.colormap_name = cmap.value
-
-          const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-          let url = `${tilejson_endpoint}?${url_params}`
-
-          map.addSource('raster', { type: 'raster', url: url , tileSize: 256})
-          addLayer(vizType)
-          break
-
-        case 'point':
-          map.addSource('mvt', {
-            type: 'vector',
-            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=point`
-          })
-          addLayer(vizType)
-          break
-
-        case 'polygon':
-          map.addSource('mvt', {
-            type: 'vector',
-            url: `${tilejson_endpoint}?tile_format=pbf&feature_type=polygon`
-          })
-          addLayer(vizType)
-          break
-
-        default:
-          throw new Error(`Invalid ${vizType}`)
+var map = new mapboxgl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      'toner-lite': {
+        type: 'raster',
+        tiles: [
+          'https://stamen-tiles-a.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png',
+          'https://stamen-tiles-b.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png',
+          'https://stamen-tiles-c.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png',
+          'https://stamen-tiles-d.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png'
+        ],
+        tileSize: 256,
+        attribution:
+          'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.'
       }
-    }
+    },
+    layers: [
+      {
+        'id': 'basemap',
+        'type': 'raster',
+        'source': 'toner-lite',
+        'minzoom': 0,
+        'maxzoom': 20
+      }
+    ]
+  },
+  center: [0, 0],
+  zoom: 1
+})
 
-    const set3bViz = () => {
-      const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
-      const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
-      const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
+map.on('zoom', function (e) {
+  const z = (map.getZoom()).toString().slice(0, 6)
+  document.getElementById('zoom').textContent = z
+})
 
-      params = {}
+const set1bViz = () => {
+  params = {}
+  const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
+  switch (vizType) {
+    case 'raster':
+      params.bands = document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")
+
       if (['uint8','int8'].indexOf(scope.data_type) === -1) {
         params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
       }
-      let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-      if (url_params !== '') url_params = `${url_params}&`
 
-      const bands_params = [r, g, b].map(i => `band=${i}`).join('&')
-      let url = `${tilejson_endpoint}?${url_params}${bands_params}`
+      const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
+      if (cmap.value !== 'b&w') params.colormap_name = cmap.value
 
-      map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
-      map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
-      if (scope.dataset_statistics) addHisto3Bands()
-    }
+      const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
+      let url = `${tilejson_endpoint}?${url_params}`
 
-    const switchViz = () => {
-      if (map.getLayer('raster')) map.removeLayer('raster')
-      if (map.getSource('raster')) map.removeSource('raster')
+      map.addSource('raster', { type: 'raster', url: url , tileSize: 256})
+      addLayer(vizType)
+      break
 
-      if (map.getLayer('mvt')) map.removeLayer('mvt')
-      if (map.getSource('mvt')) { map.removeSource('mvt') }
+    case 'point':
+      map.addSource('mvt', {
+        type: 'vector',
+        url: `${tilejson_endpoint}?tile_format=pbf&feature_type=point`
+      })
+      addLayer(vizType)
+      break
 
-      const rasterType = document.getElementById('toolbar').querySelector(".active").id
-      switch (rasterType) {
-        case '1b':
-          set1bViz()
-          break
-        case '3b':
-          set3bViz()
-          break
-        default:
-          throw new Error(`Invalid ${rasterType}`)
-      }
-    }
+    case 'polygon':
+      map.addSource('mvt', {
+        type: 'vector',
+        url: `${tilejson_endpoint}?tile_format=pbf&feature_type=polygon`
+      })
+      addLayer(vizType)
+      break
 
-    const addLayer = (layerType) => {
-      if (map.getLayer('raster')) map.removeLayer('raster')
-      if (map.getLayer('mvt')) map.removeLayer('mvt')
+    default:
+      throw new Error(`Invalid ${vizType}`)
+  }
+}
 
-      let sMin = parseFloat(document.getElementById('data-min').value)
-      const sMax = parseFloat(document.getElementById('data-max').value)
-      if (sMin === sMax) sMin = sMin - 0.00001
+const set3bViz = () => {
+  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
+  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
+  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
 
-      if (scope.dataset_statistics) addHisto1Band()
+  params = {}
+  if (['uint8','int8'].indexOf(scope.data_type) === -1) {
+    params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
+  }
+  let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
+  if (url_params !== '') url_params = `${url_params}&`
 
-      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      const propName = active_layer.value
-      const exag = parseFloat(document.getElementById('ex-value').value)
+  const bands_params = [r, g, b].map(i => `bands=${i}`).join('&')
+  let url = `${tilejson_endpoint}?${url_params}${bands_params}`
 
-      switch (layerType) {
-        case 'raster':
-          map.addLayer({
-            id: 'raster',
-            type: 'raster',
-            source: 'raster'
-          })
-          break
+  map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
+  map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
+  if (scope.dataset_statistics) addHisto3Bands()
+}
 
-        case 'point':
-          map.addLayer({
-            id: 'mvt',
-            source: 'mvt',
-            'source-layer': 'my_layer',
-            type: 'circle',
-            paint: {
-              'circle-color': [
-                'interpolate',
-                ['linear'],
-                ['to-number', ['get', propName]],
-                sMin, '#3700f0',
-                sMax, '#ed0707'
-              ],
-              'circle-radius': {
-                'base': 1,
-                'stops': [
-                  [0, 10],
-                  [9, 5]
-                ]
-              }
-            }
-          })
+const switchViz = () => {
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getSource('raster')) map.removeSource('raster')
 
-          break
+  if (map.getLayer('mvt')) map.removeLayer('mvt')
+  if (map.getSource('mvt')) { map.removeSource('mvt') }
 
-        case 'polygon':
-          map.addLayer({
-            id: 'mvt',
-            source: 'mvt',
-            'source-layer': 'my_layer',
-            type: 'fill-extrusion',
-            paint: {
-              'fill-extrusion-opacity': 1,
-              'fill-extrusion-height': [
-                'interpolate',
-                ['linear'],
-                ['to-number', ['get', propName]],
-                sMin, 0,
-                sMax, sMax * exag
-              ],
-              'fill-extrusion-color': [
-                'interpolate',
-                ['linear'],
-                ['to-number', ['get', propName]],
-                sMin, '#3700f0',
-                sMax, '#ed0707'
-              ]
-            }
-          })
+  const rasterType = document.getElementById('toolbar').querySelector(".active").id
+  switch (rasterType) {
+    case '1b':
+      set1bViz()
+      break
+    case '3b':
+      set3bViz()
+      break
+    default:
+      throw new Error(`Invalid ${rasterType}`)
+  }
+}
 
-          break
+const addLayer = (layerType) => {
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getLayer('mvt')) map.removeLayer('mvt')
 
-        default:
-          throw new Error(`Invalid ${layerType}`)
-      }
-    }
+  let sMin = parseFloat(document.getElementById('data-min').value)
+  const sMax = parseFloat(document.getElementById('data-max').value)
+  if (sMin === sMax) sMin = sMin - 0.00001
 
-    const addHisto3Bands = () => {
-      const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("name")
-      const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("name")
-      const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("name")
+  if (scope.dataset_statistics) addHisto1Band()
 
-      const rStats = scope.dataset_statistics[r]
-      const gStats = scope.dataset_statistics[g]
-      const bStats = scope.dataset_statistics[b]
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const propName = active_layer.value
+  const exag = parseFloat(document.getElementById('ex-value').value)
 
-      const minV = Math.min(...[rStats.min, gStats.min, bStats.min])
-      const maxV = Math.max(...[rStats.max, gStats.max, bStats.max])
+  switch (layerType) {
+    case 'raster':
+      map.addLayer({
+        id: 'raster',
+        type: 'raster',
+        source: 'raster'
+      })
+      break
 
-      let rCounts = rStats.histogram[0]
-      let gCounts = gStats.histogram[0]
-      let bCounts = bStats.histogram[0]
-
-      const rValues = rStats.histogram[1]
-      const gValues = gStats.histogram[1]
-      const bValues = bStats.histogram[1]
-
-      const add = (a, b) => a + b
-
-      const sumR = rCounts.reduce(add)
-      const sumG = gCounts.reduce(add)
-      const sumB = bCounts.reduce(add)
-
-      rCounts = rCounts.map((e) => {return e / sumR * 100})
-      gCounts = gCounts.map((e) => {return e / sumG * 100})
-      bCounts = bCounts.map((e) => {return e / sumB * 100})
-      const maxH = Math.max(...rCounts, ...gCounts, ...bCounts)
-
-      const bbox = d3.select('#histogram').node().getBoundingClientRect()
-
-      // set the dimensions and margins of the graph
-      const margin = { top: 10, right: 30, bottom: 30, left: 40 }
-      const width = bbox.width - margin.left - margin.right
-      const height = bbox.height - margin.top - margin.bottom
-
-      d3.select('#histogram').selectAll('*').remove()
-      // append the svg object to the body of the page
-      var svg = d3.select('#histogram')
-        .append('svg')
-        .attr('width', width + margin.left + margin.right)
-        .attr('height', height + margin.top + margin.bottom)
-        .append('g')
-        .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
-
-      // X axis: scale and draw:
-      var x = d3.scaleLinear()
-        .domain([minV, maxV])
-        .range([0, width])
-
-      svg.append('g')
-        .attr('transform', 'translate(0,' + height + ')')
-        .call(d3.axisBottom(x))
-
-      // Y axis: scale and draw:
-      var y = d3.scaleLinear().range([height, 0])
-      y.domain([0, maxH + 5])
-      svg.append('g').call(d3.axisLeft(y))
-
-      const addLine = (counts, values, color) => {
-        const data = []
-        for (var i = 0; i < counts.length; i++) {
-          data.push({count: counts[i], value: values[i]})
-        }
-
-        var guide = d3.line()
-                      .x(function(d){ return x(d.value) })
-                      .y(function(d){ return y(d.count) });
-
-        var line = svg.append('path')
-                      .datum(data)
-                      .attr('d', guide)
-                      .attr('class', `line-${color}`);
-      }
-      addLine(rCounts, rValues, "red")
-      addLine(gCounts, gValues, "green")
-      addLine(bCounts, bValues, "blue")
-
-      //Draw axes
-      svg.append("g")
-          .attr("class", "x axis")
-          .attr("transform", "translate(0," + maxH + 5 + ")")
-          .call(x);
-
-      svg.append("g")
-          .attr("class", "y axis")
-          .call(y)
-          .append("text")
-          .attr("transform", "rotate(-90)")
-          .attr("y", 6)
-          .attr("dy", ".71em")
-          .style("text-anchor", "end")
-
-          const data = {
-            "Min": `${rStats.min}, ${gStats.min}, ${bStats.min}`,
-            "Max": `${rStats.max}, ${gStats.max}, ${bStats.max}`,
-            "Stddev": `${rStats.std.toFixed(2)}, ${gStats.std.toFixed(2)}, ${bStats.std.toFixed(2)}`,
+    case 'point':
+      map.addLayer({
+        id: 'mvt',
+        source: 'mvt',
+        'source-layer': 'my_layer',
+        type: 'circle',
+        paint: {
+          'circle-color': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', propName]],
+            sMin, '#3700f0',
+            sMax, '#ed0707'
+          ],
+          'circle-radius': {
+            'base': 1,
+            'stops': [
+              [0, 10],
+              [9, 5]
+            ]
           }
-
-          let table = document.getElementById("histogram-table")
-          table.innerHTML = ""
-
-          for (let element of Object.entries(data)) {
-            let row = table.insertRow();
-            for (key in element) {
-              let cell = row.insertCell();
-              let text = document.createTextNode(element[key]);
-              cell.appendChild(text);
-            }
-          }
-          table.classList.remove('none')
         }
+      })
 
-    const addHisto1Band = () => {
-      const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("name")]
+      break
 
-      let counts = stats.histogram[0]
-      const sum = counts.reduce(function(a, b){
-          return a + b;
-      }, 0);
-      counts = counts.map((e) => {return e / sum * 100})
-      const maxH = Math.max(...counts)
+    case 'polygon':
+      map.addLayer({
+        id: 'mvt',
+        source: 'mvt',
+        'source-layer': 'my_layer',
+        type: 'fill-extrusion',
+        paint: {
+          'fill-extrusion-opacity': 1,
+          'fill-extrusion-height': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', propName]],
+            sMin, 0,
+            sMax, sMax * exag
+          ],
+          'fill-extrusion-color': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', propName]],
+            sMin, '#3700f0',
+            sMax, '#ed0707'
+          ]
+        }
+      })
 
-      const values = stats.histogram[1]
-      const bbox = d3.select('#histogram').node().getBoundingClientRect()
+      break
 
-      // set the dimensions and margins of the graph
-      const margin = { top: 10, right: 30, bottom: 30, left: 40 }
-      const width = bbox.width - margin.left - margin.right
-      const height = bbox.height - margin.top - margin.bottom
+    default:
+      throw new Error(`Invalid ${layerType}`)
+  }
+}
 
-      d3.select('#histogram').selectAll('*').remove()
-      // append the svg object to the body of the page
-      var svg = d3.select('#histogram')
-        .append('svg')
-        .attr('width', width + margin.left + margin.right)
-        .attr('height', height + margin.top + margin.bottom)
-        .append('g')
-        .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+const addHisto3Bands = () => {
+  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("name")
+  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("name")
+  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("name")
 
-      const min = stats.min
-      const max = stats.max
+  const rStats = scope.dataset_statistics[r]
+  const gStats = scope.dataset_statistics[g]
+  const bStats = scope.dataset_statistics[b]
 
-      // X axis: scale and draw:
-      var x = d3.scaleLinear()
-        .domain([min, max])
-        .range([0, width])
+  const minV = Math.min(...[rStats.min, gStats.min, bStats.min])
+  const maxV = Math.max(...[rStats.max, gStats.max, bStats.max])
 
-      svg.append('g')
-        .attr('transform', 'translate(0,' + height + ')')
-        .call(d3.axisBottom(x))
+  let rCounts = rStats.histogram[0]
+  let gCounts = gStats.histogram[0]
+  let bCounts = bStats.histogram[0]
 
-      // Y axis: scale and draw:
-      var y = d3.scaleLinear().range([height, 0])
-      y.domain([0, maxH])
-      svg.append('g').call(d3.axisLeft(y))
+  const rValues = rStats.histogram[1]
+  const gValues = gStats.histogram[1]
+  const bValues = bStats.histogram[1]
 
-      const bins = []
-      for (var i = 0; i < counts.length; i++) {
-        bins.push({
-          count: counts[i],
-          value: values[i]
-        })
-      }
+  const add = (a, b) => a + b
 
-      // append the bar rectangles to the svg element
-      svg.selectAll('rect')
-        .data(bins)
-        .enter()
-        .append('rect')
-        .attr('x', 1)
-        .attr('transform', d => { return 'translate(' + x(d.value) + ',' + y(d.count) + ')' })
-        .attr('width', 10)
-        .attr('height', d => { return height - y(d.count) })
-        .style('fill', '#69b3a2')
+  const sumR = rCounts.reduce(add)
+  const sumG = gCounts.reduce(add)
+  const sumB = bCounts.reduce(add)
 
-        const data = {
-        "Min": stats.min,
-        "Max": stats.max,
-        "Stddev": stats.std.toFixed(2),
+  rCounts = rCounts.map((e) => {return e / sumR * 100})
+  gCounts = gCounts.map((e) => {return e / sumG * 100})
+  bCounts = bCounts.map((e) => {return e / sumB * 100})
+  const maxH = Math.max(...rCounts, ...gCounts, ...bCounts)
+
+  const bbox = d3.select('#histogram').node().getBoundingClientRect()
+
+  // set the dimensions and margins of the graph
+  const margin = { top: 10, right: 30, bottom: 30, left: 40 }
+  const width = bbox.width - margin.left - margin.right
+  const height = bbox.height - margin.top - margin.bottom
+
+  d3.select('#histogram').selectAll('*').remove()
+  // append the svg object to the body of the page
+  var svg = d3.select('#histogram')
+    .append('svg')
+    .attr('width', width + margin.left + margin.right)
+    .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+
+  // X axis: scale and draw:
+  var x = d3.scaleLinear()
+    .domain([minV, maxV])
+    .range([0, width])
+
+  svg.append('g')
+    .attr('transform', 'translate(0,' + height + ')')
+    .call(d3.axisBottom(x))
+
+  // Y axis: scale and draw:
+  var y = d3.scaleLinear().range([height, 0])
+  y.domain([0, maxH + 5])
+  svg.append('g').call(d3.axisLeft(y))
+
+  const addLine = (counts, values, color) => {
+    const data = []
+    for (var i = 0; i < counts.length; i++) {
+      data.push({count: counts[i], value: values[i]})
+    }
+
+    var guide = d3.line()
+                  .x(function(d){ return x(d.value) })
+                  .y(function(d){ return y(d.count) });
+
+    var line = svg.append('path')
+                  .datum(data)
+                  .attr('d', guide)
+                  .attr('class', `line-${color}`);
+  }
+  addLine(rCounts, rValues, "red")
+  addLine(gCounts, gValues, "green")
+  addLine(bCounts, bValues, "blue")
+
+  //Draw axes
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + maxH + 5 + ")")
+      .call(x);
+
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(y)
+      .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+
+      const data = {
+        "Min": `${rStats.min}, ${gStats.min}, ${bStats.min}`,
+        "Max": `${rStats.max}, ${gStats.max}, ${bStats.max}`,
+        "Stddev": `${rStats.std.toFixed(2)}, ${gStats.std.toFixed(2)}, ${bStats.std.toFixed(2)}`,
       }
 
       let table = document.getElementById("histogram-table")
@@ -720,321 +655,404 @@
       table.classList.remove('none')
     }
 
-    document.getElementById('btn-stats').addEventListener('click', () => {
-      document.getElementById('fetch-stats-div').classList.add('none')
-      document.getElementById('histogram').classList.remove('none')
-      document.getElementById('histogram-table').classList.remove('none')
+const addHisto1Band = () => {
+  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("name")]
 
-      fetch(`${stats_endpoint}?max_size=256`)
+  let counts = stats.histogram[0]
+  const sum = counts.reduce(function(a, b){
+      return a + b;
+  }, 0);
+  counts = counts.map((e) => {return e / sum * 100})
+  const maxH = Math.max(...counts)
+
+  const values = stats.histogram[1]
+  const bbox = d3.select('#histogram').node().getBoundingClientRect()
+
+  // set the dimensions and margins of the graph
+  const margin = { top: 10, right: 30, bottom: 30, left: 40 }
+  const width = bbox.width - margin.left - margin.right
+  const height = bbox.height - margin.top - margin.bottom
+
+  d3.select('#histogram').selectAll('*').remove()
+  // append the svg object to the body of the page
+  var svg = d3.select('#histogram')
+    .append('svg')
+    .attr('width', width + margin.left + margin.right)
+    .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+
+  const min = stats.min
+  const max = stats.max
+
+  // X axis: scale and draw:
+  var x = d3.scaleLinear()
+    .domain([min, max])
+    .range([0, width])
+
+  svg.append('g')
+    .attr('transform', 'translate(0,' + height + ')')
+    .call(d3.axisBottom(x))
+
+  // Y axis: scale and draw:
+  var y = d3.scaleLinear().range([height, 0])
+  y.domain([0, maxH])
+  svg.append('g').call(d3.axisLeft(y))
+
+  const bins = []
+  for (var i = 0; i < counts.length; i++) {
+    bins.push({
+      count: counts[i],
+      value: values[i]
+    })
+  }
+
+  // append the bar rectangles to the svg element
+  svg.selectAll('rect')
+    .data(bins)
+    .enter()
+    .append('rect')
+    .attr('x', 1)
+    .attr('transform', d => { return 'translate(' + x(d.value) + ',' + y(d.count) + ')' })
+    .attr('width', 10)
+    .attr('height', d => { return height - y(d.count) })
+    .style('fill', '#69b3a2')
+
+    const data = {
+    "Min": stats.min,
+    "Max": stats.max,
+    "Stddev": stats.std.toFixed(2),
+  }
+
+  let table = document.getElementById("histogram-table")
+  table.innerHTML = ""
+
+  for (let element of Object.entries(data)) {
+    let row = table.insertRow();
+    for (key in element) {
+      let cell = row.insertCell();
+      let text = document.createTextNode(element[key]);
+      cell.appendChild(text);
+    }
+  }
+  table.classList.remove('none')
+}
+
+document.getElementById('btn-stats').addEventListener('click', () => {
+  document.getElementById('fetch-stats-div').classList.add('none')
+  document.getElementById('histogram').classList.remove('none')
+  document.getElementById('histogram-table').classList.remove('none')
+
+  fetch(`${stats_endpoint}?max_size=256`)
+    .then(res => {
+      if (res.ok) return res.json()
+      throw new Error('Network response was not ok.')
+    })
+    .then(data => {
+      scope.dataset_statistics = data
+      if (document.getElementById('toolbar').querySelector(".active").id === '1b') {
+        addHisto1Band()
+      } else {
+        addHisto3Bands()
+      }
+      document.getElementById('histogram').classList.remove('loading')
+    })
+    .catch(err => {
+      console.warn(err)
+    })
+})
+
+document.getElementById('btn-hide').addEventListener('click', () => {
+  document.getElementById('hide-arrow').classList.toggle('off')
+  document.getElementById('menu').classList.toggle('off')
+})
+
+document.getElementById('viz-selector').addEventListener('change', (e) => {
+  switch (e.target.value) {
+    case 'raster':
+      document.getElementById('colormap-section').classList.remove('none')
+      document.getElementById('extrusion-section').classList.add('none')
+      break
+
+    case 'point':
+      document.getElementById('colormap-section').classList.add('none')
+      document.getElementById('extrusion-section').classList.add('none')
+      break
+
+    case 'polygon':
+      document.getElementById('colormap-section').classList.add('none')
+      document.getElementById('extrusion-section').classList.remove('none')
+      break
+
+    default:
+  }
+  switchViz()
+})
+
+// MVT have already all the layers while for raster we need to fetch new tiles
+const updateViz = () => {
+  const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
+  if (newViz === "raster") {
+    switchViz()
+  } else {
+    addLayer(newViz)
+  }
+}
+
+document.getElementById('layer-selector').addEventListener('change', () => {
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  updateViz()
+})
+
+document.getElementById('r-selector').addEventListener('change', () => {switchViz()})
+document.getElementById('g-selector').addEventListener('change', () => {switchViz()})
+document.getElementById('b-selector').addEventListener('change', () => {switchViz()})
+
+document.getElementById('updateExag').addEventListener('click', () => {
+  updateViz()
+})
+
+document.getElementById('colormap-selector').addEventListener('change', () => {
+  updateViz()
+})
+
+document.getElementById('btn-rescale').addEventListener('click', () => {
+  updateViz()
+})
+
+const switchPane = (event) => {
+  const cur = document.getElementById('toolbar').querySelector(".active")
+  const activeViz = cur.id
+  const nextViz = event.id
+  cur.classList.toggle('active')
+  event.classList.toggle('active')
+
+  const curSection = document.getElementById(`${activeViz}-section`)
+  curSection.classList.toggle('active')
+  const nextSection = document.getElementById(`${nextViz}-section`)
+  nextSection.classList.toggle('active')
+  switchViz()
+}
+
+const bboxPolygon = (bounds) => {
+    return {
+        'type': 'Feature',
+        'geometry': {
+            'type': 'Polygon',
+            'coordinates': [[
+                [bounds[0], bounds[1]],
+                [bounds[2], bounds[1]],
+                [bounds[2], bounds[3]],
+                [bounds[0], bounds[3]],
+                [bounds[0], bounds[1]]
+            ]]
+        },
+        'properties': {}
+    }
+}
+
+const addAOI = (bounds) => {
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [bboxPolygon(bounds)]
+  }
+
+  map.addSource('aoi', {
+    'type': 'geojson',
+    'data': geojson
+  })
+
+  map.addLayer({
+    id: 'aoi-polygon',
+    type: 'line',
+    source: 'aoi',
+    layout: {
+      'line-cap': 'round',
+      'line-join': 'round'
+    },
+    paint: {
+      'line-color': '#3bb2d0',
+      'line-width': 1
+    }
+  })
+  return
+}
+
+const truncate_lnglat = (lng, lat) => {
+  if (lng > 180.0) {
+    lng = 180.0
+  } else if (lng < -180.0) {
+    lng = -180.0
+  }
+  if (lat > 90.0) {
+    lat = 90.0
+  } else if (lat < -90.0) {
+    lat = -90.0
+  }
+  return [lng, lat]
+}
+
+map.on('load', () => {
+  map.on('mousemove', (e) => {
+    if (!map.getLayer('mvt')) return
+    const mouseRadius = 1
+    const feature = map.queryRenderedFeatures([
+      [e.point.x - mouseRadius, e.point.y - mouseRadius],
+      [e.point.x + mouseRadius, e.point.y + mouseRadius]
+    ], { layers: ['mvt'] })[0]
+    if (feature) {
+      map.getCanvas().style.cursor = 'pointer'
+    } else {
+      map.getCanvas().style.cursor = 'inherit'
+    }
+  })
+
+  map.on('click', 'mvt', (e) => {
+    let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
+    let values = Object.keys(e.features[0].properties)
+    for (var i = 0; i < values.length; i++) {
+      let value = e.features[0].properties[values[i]]
+      let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
+      html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
+    }
+
+    html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+    html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+    html += '</table>'
+    new mapboxgl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(html)
+      .addTo(map)
+  })
+
+  // we cannot click on raster layer (mapbox-gl bug)
+  map.on('click', (e) => {
+    if (!map.getLayer('raster')) return
+    const bounds = map.getSource('raster').bounds
+    if (
+      (e.lngLat.lng >= bounds[0] && e.lngLat.lng <= bounds[2]) &&
+      (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
+    ) {
+      const coord = `${e.lngLat.lng},${e.lngLat.lat}`
+      fetch(`${point_endpoint}?coordinates=${coord}`)
         .then(res => {
           if (res.ok) return res.json()
-          throw new Error('Network response was not ok.')
+          throw new Error('Network response was not ok.');
         })
         .then(data => {
-          scope.dataset_statistics = data
-          if (document.getElementById('toolbar').querySelector(".active").id === '1b') {
-            addHisto1Band()
-          } else {
-            addHisto3Bands()
+          let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
+          let values = Object.keys(data.value)
+          for (var i = 0; i < values.length; i++) {
+            let value = data.value[values[i]]
+            let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
+            html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
           }
-          document.getElementById('histogram').classList.remove('loading')
+          html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+          html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+          html += '</table>'
+          new mapboxgl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map)
         })
         .catch(err => {
           console.warn(err)
         })
-    })
+    }
+  })
 
-    document.getElementById('btn-hide').addEventListener('click', () => {
+  fetch(`${info_endpoint}`)
+    .then(res => {
+      if (res.ok) return res.json()
+      throw new Error('Network response was not ok.')
+    })
+    .then(data => {
+      console.log(data)
+      scope.data_type = data.dtype
+
+      if (['uint8','int8'].indexOf(scope.data_type) === -1) document.getElementById('minmax-data').classList.remove('none')
+
+      const mm = dtype_ranges[scope.data_type]
+      document.getElementById('data-min').value = mm[0]
+      document.getElementById('data-max').value = mm[1]
+
+      scope.band_descriptions = data.band_descriptions
+      const band_descr = data.band_descriptions
+      const nbands = band_descr.length
+
+      //Populate Band (1b) selector
+      const layerList = document.getElementById('layer-selector')
+      for (var i = 0; i < nbands; i++) {
+        let l = document.createElement('option')
+        l.setAttribute('band', band_descr[i][0])
+        let name = band_descr[i][1] || band_descr[i][0]
+        l.setAttribute('name', name)
+        l.text = name
+        layerList.appendChild(l)
+      }
+
+      // Populate R/G/B (3b) selectors
+      const rList = document.getElementById('r-selector')
+      for (var i = 0; i < nbands; i++) {
+        let l = document.createElement('option')
+        l.setAttribute('band', band_descr[i][0])
+        let name = band_descr[i][1] || band_descr[i][0]
+        l.setAttribute('name', name)
+        l.text = name
+        if (i === 0) l.selected="selected"
+        rList.appendChild(l)
+      }
+
+      const gList = document.getElementById('g-selector')
+      for (var i = 0; i < nbands; i++) {
+        let l = document.createElement('option')
+        l.setAttribute('band', band_descr[i][0])
+        let name = band_descr[i][1] || band_descr[i][0]
+        l.setAttribute('name', name)
+        l.text = name
+        if (i === 1) l.selected="selected"
+        gList.appendChild(l)
+      }
+
+      const bList = document.getElementById('b-selector')
+      for (var i = 0; i < nbands; i++) {
+        let l = document.createElement('option')
+        l.setAttribute('band', band_descr[i][0])
+        let name = band_descr[i][1] || band_descr[i][0]
+        l.setAttribute('name', name)
+        l.text = name
+        if (band_descr.length > 2 && i === 2) {
+          l.selected="selected"
+        } else {
+          l.selected="selected"
+        }
+        bList.appendChild(l)
+      }
+
+      // remove loader
+      document.getElementById('loader').classList.toggle('off')
       document.getElementById('hide-arrow').classList.toggle('off')
       document.getElementById('menu').classList.toggle('off')
-    })
 
-    document.getElementById('viz-selector').addEventListener('change', (e) => {
-      switch (e.target.value) {
-        case 'raster':
-          document.getElementById('colormap-section').classList.remove('none')
-          document.getElementById('extrusion-section').classList.add('none')
-          break
+      const ll = truncate_lnglat(data.bounds[0], data.bounds[1])
+      const ur = truncate_lnglat(data.bounds[2], data.bounds[3])
+      map.fitBounds([ll, ur])
 
-        case 'point':
-          document.getElementById('colormap-section').classList.add('none')
-          document.getElementById('extrusion-section').classList.add('none')
-          break
+      addAOI(data.bounds)
 
-        case 'polygon':
-          document.getElementById('colormap-section').classList.add('none')
-          document.getElementById('extrusion-section').classList.remove('none')
-          break
-
-        default:
+      if (nbands === 1) {
+        document.getElementById('3b').classList.add('disabled')
+        document.getElementById('3b').classList.remove('active')
+        document.getElementById('3b-section').classList.toggle('active')
+        document.getElementById('1b').classList.add('active')
+        document.getElementById('1b-section').classList.toggle('active')
       }
       switchViz()
     })
-
-    // MVT have already all the layers while for raster we need to fetch new tiles
-    const updateViz = () => {
-      const newViz = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
-      if (newViz === "raster") {
-        switchViz()
-      } else {
-        addLayer(newViz)
-      }
-    }
-
-    document.getElementById('layer-selector').addEventListener('change', () => {
-      const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-      updateViz()
+    .catch(err => {
+      console.warn(err)
     })
-
-    document.getElementById('r-selector').addEventListener('change', () => {switchViz()})
-    document.getElementById('g-selector').addEventListener('change', () => {switchViz()})
-    document.getElementById('b-selector').addEventListener('change', () => {switchViz()})
-
-    document.getElementById('updateExag').addEventListener('click', () => {
-      updateViz()
-    })
-
-    document.getElementById('colormap-selector').addEventListener('change', () => {
-      updateViz()
-    })
-
-    document.getElementById('btn-rescale').addEventListener('click', () => {
-      updateViz()
-    })
-
-    const switchPane = (event) => {
-      const cur = document.getElementById('toolbar').querySelector(".active")
-      const activeViz = cur.id
-      const nextViz = event.id
-      cur.classList.toggle('active')
-      event.classList.toggle('active')
-
-      const curSection = document.getElementById(`${activeViz}-section`)
-      curSection.classList.toggle('active')
-      const nextSection = document.getElementById(`${nextViz}-section`)
-      nextSection.classList.toggle('active')
-      switchViz()
-    }
-
-    const bboxPolygon = (bounds) => {
-        return {
-            'type': 'Feature',
-            'geometry': {
-                'type': 'Polygon',
-                'coordinates': [[
-                    [bounds[0], bounds[1]],
-                    [bounds[2], bounds[1]],
-                    [bounds[2], bounds[3]],
-                    [bounds[0], bounds[3]],
-                    [bounds[0], bounds[1]]
-                ]]
-            },
-            'properties': {}
-        }
-    }
-
-    const addAOI = (bounds) => {
-      const geojson = {
-          "type": "FeatureCollection",
-          "features": [bboxPolygon(bounds)]
-      }
-
-      map.addSource('aoi', {
-        'type': 'geojson',
-        'data': geojson
-      })
-
-      map.addLayer({
-        id: 'aoi-polygon',
-        type: 'line',
-        source: 'aoi',
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round'
-        },
-        paint: {
-          'line-color': '#3bb2d0',
-          'line-width': 1
-        }
-      })
-      return
-    }
-
-    const truncate_lnglat = (lng, lat) => {
-      if (lng > 180.0) {
-        lng = 180.0
-      } else if (lng < -180.0) {
-        lng = -180.0
-      }
-      if (lat > 90.0) {
-        lat = 90.0
-      } else if (lat < -90.0) {
-        lat = -90.0
-      }
-      return [lng, lat]
-    }
-
-    map.on('load', () => {
-      map.on('mousemove', (e) => {
-        if (!map.getLayer('mvt')) return
-        const mouseRadius = 1
-        const feature = map.queryRenderedFeatures([
-          [e.point.x - mouseRadius, e.point.y - mouseRadius],
-          [e.point.x + mouseRadius, e.point.y + mouseRadius]
-        ], { layers: ['mvt'] })[0]
-        if (feature) {
-          map.getCanvas().style.cursor = 'pointer'
-        } else {
-          map.getCanvas().style.cursor = 'inherit'
-        }
-      })
-
-      map.on('click', 'mvt', (e) => {
-        let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
-        let values = Object.keys(e.features[0].properties)
-        for (var i = 0; i < values.length; i++) {
-          let value = e.features[0].properties[values[i]]
-          let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
-          html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
-        }
-
-        html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
-        html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
-        html += '</table>'
-        new mapboxgl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(html)
-          .addTo(map)
-      })
-
-      // we cannot click on raster layer (mapbox-gl bug)
-      map.on('click', (e) => {
-        if (!map.getLayer('raster')) return
-        const bounds = map.getSource('raster').bounds
-        if (
-          (e.lngLat.lng >= bounds[0] && e.lngLat.lng <= bounds[2]) &&
-          (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
-        ) {
-          const coord = `${e.lngLat.lng},${e.lngLat.lat}`
-          fetch(`${point_endpoint}?coordinates=${coord}`)
-            .then(res => {
-              if (res.ok) return res.json()
-              throw new Error('Network response was not ok.');
-            })
-            .then(data => {
-              let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
-              let values = Object.keys(data.value)
-              for (var i = 0; i < values.length; i++) {
-                let value = data.value[values[i]]
-                let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
-                html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
-              }
-              html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
-              html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
-              html += '</table>'
-              new mapboxgl.Popup()
-                .setLngLat(e.lngLat)
-                .setHTML(html)
-                .addTo(map)
-            })
-            .catch(err => {
-              console.warn(err)
-            })
-        }
-      })
-
-      fetch(`${info_endpoint}`)
-        .then(res => {
-          if (res.ok) return res.json()
-          throw new Error('Network response was not ok.')
-        })
-        .then(data => {
-          console.log(data)
-          scope.data_type = data.dtype
-
-          if (['uint8','int8'].indexOf(scope.data_type) === -1) document.getElementById('minmax-data').classList.remove('none')
-
-          const mm = dtype_ranges[scope.data_type]
-          document.getElementById('data-min').value = mm[0]
-          document.getElementById('data-max').value = mm[1]
-
-          scope.band_descriptions = data.band_descriptions
-          const band_descr = data.band_descriptions
-          const nbands = band_descr.length
-
-          //Populate Band (1b) selector
-          const layerList = document.getElementById('layer-selector')
-          for (var i = 0; i < nbands; i++) {
-            let l = document.createElement('option')
-            l.setAttribute('band', band_descr[i][0])
-            let name = band_descr[i][1] || band_descr[i][0]
-            l.setAttribute('name', name)
-            l.text = name
-            layerList.appendChild(l)
-          }
-
-          // Populate R/G/B (3b) selectors
-          const rList = document.getElementById('r-selector')
-          for (var i = 0; i < nbands; i++) {
-            let l = document.createElement('option')
-            l.setAttribute('band', band_descr[i][0])
-            let name = band_descr[i][1] || band_descr[i][0]
-            l.setAttribute('name', name)
-            l.text = name
-            if (i === 0) l.selected="selected"
-            rList.appendChild(l)
-          }
-
-          const gList = document.getElementById('g-selector')
-          for (var i = 0; i < nbands; i++) {
-            let l = document.createElement('option')
-            l.setAttribute('band', band_descr[i][0])
-            let name = band_descr[i][1] || band_descr[i][0]
-            l.setAttribute('name', name)
-            l.text = name
-            if (i === 1) l.selected="selected"
-            gList.appendChild(l)
-          }
-
-          const bList = document.getElementById('b-selector')
-          for (var i = 0; i < nbands; i++) {
-            let l = document.createElement('option')
-            l.setAttribute('band', band_descr[i][0])
-            let name = band_descr[i][1] || band_descr[i][0]
-            l.setAttribute('name', name)
-            l.text = name
-            if (band_descr.length > 2 && i === 2) {
-              l.selected="selected"
-            } else {
-              l.selected="selected"
-            }
-            bList.appendChild(l)
-          }
-
-          // remove loader
-          document.getElementById('loader').classList.toggle('off')
-          document.getElementById('hide-arrow').classList.toggle('off')
-          document.getElementById('menu').classList.toggle('off')
-
-          const ll = truncate_lnglat(data.bounds[0], data.bounds[1])
-          const ur = truncate_lnglat(data.bounds[2], data.bounds[3])
-          map.fitBounds([ll, ur])
-
-          addAOI(data.bounds)
-
-          if (nbands === 1) {
-            document.getElementById('3b').classList.add('disabled')
-            document.getElementById('3b').classList.remove('active')
-            document.getElementById('3b-section').classList.toggle('active')
-            document.getElementById('1b').classList.add('active')
-            document.getElementById('1b-section').classList.toggle('active')
-          }
-          switchViz()
-        })
-        .catch(err => {
-          console.warn(err)
-        })
-    })
+})
 
     </script>
 
