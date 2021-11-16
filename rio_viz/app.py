@@ -100,7 +100,6 @@ class viz:
 
     router: Optional[APIRouter] = attr.ib(init=False)
 
-    idx_dependency: Type[DefaultDependency] = attr.ib(init=False)
     layer_dependency: Type[DefaultDependency] = attr.ib(init=False)
 
     @reader_type.validator
