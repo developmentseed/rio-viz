@@ -86,7 +86,8 @@ class NodataParamType(click.ParamType):
 @click.option(
     "--layers",
     type=str,
-    help="limit to specific layers (only used for MultiBand and MultiBase Readers).",
+    help="limit to specific layers (only used for MultiBand and MultiBase Readers) (e.g --layers b1 --layers b2).",
+    multiple=True,
 )
 @click.option(
     "--server-only",
@@ -140,7 +141,7 @@ def viz(
             and not cog_validate(src_path)[0]
         ):
             # create tmp COG
-            click.echo("create temporaty COG")
+            click.echo("create temporary COG")
             tmp_path = ctx.enter_context(TemporaryRasterFile())
 
             output_profile = cog_profiles.get("deflate")
@@ -164,7 +165,7 @@ def viz(
             minzoom=minzoom,
             maxzoom=maxzoom,
             nodata=nodata,
-            layers=layers.split(",") if layers else None,
+            layers=layers,
             reader_type=reader_type,
         )
         if not server_only:

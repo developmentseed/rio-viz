@@ -60,7 +60,7 @@ Options:
   --host TEXT          Webserver host url (default: 127.0.0.1)
   --no-check           Ignore COG validation
   --reader TEXT        rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`
-  --layers TEXT        limit to specific layers (only used for MultiBand and MultiBase Readers).
+  --layers TEXT        limit to specific layers (only used for MultiBand and MultiBase Readers). (e.g --layers b1 --layers b2).
   --server-only        Launch API without opening the rio-viz web-page.
   --config NAME=VALUE  GDAL configuration options.
   --help               Show this message and exit.
