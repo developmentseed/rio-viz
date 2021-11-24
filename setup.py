@@ -9,7 +9,7 @@ with open("README.md") as f:
 inst_reqs = [
     "braceexpand",
     "rio-cogeo>=3.0",
-    "titiler.core>=0.4.0a1,<0.5",
+    "titiler.core>=0.4.0a2,<0.5",
     "starlette-cramjam>=0.1.0,<0.2",
     "uvicorn",
 ]

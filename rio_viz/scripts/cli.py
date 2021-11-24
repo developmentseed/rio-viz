@@ -120,8 +120,10 @@ def viz(
     if reader:
         module, classname = reader.rsplit(".", 1)
         reader = getattr(importlib.import_module(module), classname)  # noqa
-        if not issubclass(reader, (BaseReader, AsyncBaseReader)):
-            warnings.warn("Reader should be a subclass of rio_tiler.io.BaseReader")
+        if not issubclass(
+            reader, (BaseReader, AsyncBaseReader, MultiBandReader, MultiBaseReader)
+        ):
+            warnings.warn(f"Invalid reader type: {type(reader)}")
 
     dataset_reader = reader or COGReader
 

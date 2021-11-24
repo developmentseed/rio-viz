@@ -4,10 +4,16 @@ Create an AsyncBaseReader from a BaseReader subclass.
 
 """
 
-from typing import Any, Coroutine, Dict, List, Optional, Tuple, Type
+from typing import Any, Coroutine, Dict, List, Optional, Tuple, Type, Union
 
 import attr
-from rio_tiler.io import AsyncBaseReader, BaseReader, COGReader
+from rio_tiler.io import (
+    AsyncBaseReader,
+    BaseReader,
+    COGReader,
+    MultiBandReader,
+    MultiBaseReader,
+)
 from rio_tiler.models import BandStatistics, ImageData, Info
 from starlette.concurrency import run_in_threadpool
 
@@ -16,13 +22,17 @@ from starlette.concurrency import run_in_threadpool
 class AsyncReader(AsyncBaseReader):
     """Async Reader class."""
 
-    dataset: Type[BaseReader]
+    dataset: Union[Type[BaseReader], Type[MultiBandReader], Type[MultiBaseReader]]
 
     assets: Optional[List[str]]
     bands: Optional[List[str]]
     colormap: Optional[Dict]
 
-    reader: Type[BaseReader] = COGReader
+    reader: Union[
+        Type[BaseReader],
+        Type[MultiBandReader],
+        Type[MultiBaseReader],
+    ] = COGReader
 
     def __attrs_post_init__(self):
         """PostInit."""

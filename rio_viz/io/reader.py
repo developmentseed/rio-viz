@@ -15,10 +15,10 @@ class MultiFilesBandsReader(MultiBandReader):
     """Multiple Files as Bands."""
 
     input: Any = attr.ib()
-    reader: Type[BaseReader] = attr.ib(default=COGReader)
+    tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
 
     reader_options: Dict = attr.ib(factory=dict)
-    tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
+    reader: Type[BaseReader] = attr.ib(default=COGReader)
 
     files: List[str] = attr.ib(init=False)
 
@@ -47,10 +47,10 @@ class MultiFilesAssetsReader(MultiBaseReader):
     """Multiple Files as Assets."""
 
     input: Any = attr.ib()
-    reader: Type[BaseReader] = attr.ib(default=COGReader)
+    tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
 
     reader_options: Dict = attr.ib(factory=dict)
-    tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
+    reader: Type[BaseReader] = attr.ib(default=COGReader)
 
     files: List[str] = attr.ib(init=False)
 

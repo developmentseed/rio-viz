@@ -25,16 +25,16 @@ class MosaicReader(BaseReader):
     input: str = attr.ib()
     tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
 
-    reader: Type[BaseReader] = attr.ib(default=COGReader)
+    reader: Type[COGReader] = attr.ib(default=COGReader)
 
     colormap: Dict = attr.ib(init=False)
 
-    datasets: Dict[str, Type[BaseReader]] = attr.ib(init=False)
+    datasets: Dict[str, Type[COGReader]] = attr.ib(init=False)
 
     def __attrs_post_init__(self):
         """Fetch Reference band to get the bounds."""
         self.datasets = {
-            src_path: COGReader(src_path, tms=self.tms)
+            src_path: self.reader(src_path, tms=self.tms)
             for src_path in braceexpand(self.input)
         }
 
