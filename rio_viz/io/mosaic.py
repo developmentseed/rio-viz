@@ -97,9 +97,7 @@ class MosaicReader(BaseReader):
     ) -> List:
         """Get Point value."""
         mosaic_assets = (
-            list(reversed(self.datasets.keys()))
-            if reverse
-            else list(self.datasets.keys())
+            list(reversed(list(self.datasets))) if reverse else list(self.datasets)
         )
 
         def _reader(asset: str, lon: float, lat: float, **kwargs) -> List:
@@ -122,7 +120,7 @@ class MosaicReader(BaseReader):
         """info."""
         # !!! We return info from the first dataset
         # Most of the info should be similar in other files ¡¡¡
-        item = list(self.datasets.keys())[0]
+        item = list(self.datasets)[0]
         info_metadata = (
             self.datasets[item]
             .info()
@@ -145,7 +143,7 @@ class MosaicReader(BaseReader):
     def statistics(self, **kwargs: Any) -> Dict[str, BandStatistics]:
         """Return Dataset's statistics."""
         # FOR NOW WE ONLY RETURN VALUE FROM THE FIRST FILE
-        item = list(self.datasets.keys())[0]
+        item = list(self.datasets)[0]
         return self.datasets[item].statistics(**kwargs)
 
     ############################################################################
