@@ -76,9 +76,7 @@ class MosaicReader(BaseReader):
     ) -> ImageData:
         """Get Tile"""
         mosaic_assets = (
-            list(reversed(self.datasets.keys()))
-            if reverse
-            else list(self.datasets.keys())
+            list(reversed(list(self.datasets))) if reverse else list(self.datasets)
         )
 
         def _reader(
