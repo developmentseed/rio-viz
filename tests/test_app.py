@@ -10,10 +10,14 @@ from starlette.testclient import TestClient
 
 from rio_viz.app import viz
 from rio_viz.compat import AsyncReader
-from rio_viz.io.reader import MultiFilesReader
+from rio_viz.io.mosaic import MosaicReader
+from rio_viz.io.reader import MultiFilesAssetsReader, MultiFilesBandsReader
 
 cog_path = os.path.join(os.path.dirname(__file__), "fixtures", "cog.tif")
 cogb1b2b3_path = os.path.join(os.path.dirname(__file__), "fixtures", "cogb{1,2,3}.tif")
+cog_mosaic_path = os.path.join(
+    os.path.dirname(__file__), "fixtures", "mosaic_cog{1,2}.tif"
+)
 
 
 def test_viz():
@@ -101,7 +105,7 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
-    response = client.get("/metadata")
+    response = client.get("/statistics")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
@@ -130,7 +134,7 @@ def test_viz():
     response = client.get("/point?coordinates=-2,48")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    assert response.json() == {"coordinates": [-2.0, 48.0], "value": [110]}
+    assert response.json() == {"coordinates": [-2.0, 48.0], "values": [110]}
 
     feat = json.dumps(
         {
@@ -186,12 +190,14 @@ def test_viz_custom():
     assert app.endpoint == "http://0.0.0.0:5050"
 
 
-def test_viz_multi():
+def test_viz_multibands():
     """Should work as expected (create TileServer object)."""
-    src_path = cogb1b2b3_path
-    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": MultiFilesReader})
+    dataset_reader = type(
+        "AsyncReader", (AsyncReader,), {"reader": MultiFilesBandsReader}
+    )
 
-    app = viz(src_path, reader=dataset_reader)
+    # Use default bands from the reader
+    app = viz(cogb1b2b3_path, reader=dataset_reader, reader_type="bands")
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
     client = TestClient(app.app)
@@ -200,7 +206,203 @@ def test_viz_multi():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     assert response.json()["band_descriptions"] == [
-        ["file1", ""],
-        ["file2", ""],
-        ["file3", ""],
+        ["b1", ""],
+        ["b2", ""],
+        ["b3", ""],
     ]
+
+    response = client.get("/info?bands=b1&bands=b2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.json()["band_descriptions"] == [
+        ["b1", ""],
+        ["b2", ""],
+    ]
+
+    response = client.get("/statistics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["b1", "b2", "b3"] == list(response.json())
+
+    response = client.get("/statistics?bands=b1&bands=b2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["b1", "b2"] == list(response.json())
+
+    response = client.get("/point?coordinates=-2.0,48.0")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 3
+
+    response = client.get("/point?coordinates=-2.0,48.0&bands=b1&bands=b2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 2
+
+    # Set default bands (other bands might still be available within the reader)
+    app = viz(cogb1b2b3_path, reader=dataset_reader, reader_type="bands", layers=["b1"])
+    assert app.port == 8080
+    assert app.endpoint == "http://127.0.0.1:8080"
+    client = TestClient(app.app)
+
+    response = client.get("/info")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.json()["band_descriptions"] == [
+        ["b1", ""],
+    ]
+
+    response = client.get("/info?bands=b1&bands=b2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.json()["band_descriptions"] == [
+        ["b1", ""],
+        ["b2", ""],
+    ]
+
+    response = client.get("/statistics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["b1"] == list(response.json())
+
+    response = client.get("/statistics?bands=b1&bands=b2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["b1", "b2"] == list(response.json())
+
+    response = client.get("/point?coordinates=-2.0,48.0")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 1
+
+    response = client.get("/point?coordinates=-2.0,48.0&bands=b1&bands=b2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 2
+
+
+def test_viz_multiassets():
+    """Should work as expected (create TileServer object)."""
+    dataset_reader = type(
+        "AsyncReader", (AsyncReader,), {"reader": MultiFilesAssetsReader}
+    )
+
+    # Use default bands from the reader
+    app = viz(cogb1b2b3_path, reader=dataset_reader, reader_type="assets")
+    assert app.port == 8080
+    assert app.endpoint == "http://127.0.0.1:8080"
+    client = TestClient(app.app)
+
+    response = client.get("/info")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1", "asset2", "asset3"] == list(response.json())
+    assert response.json()["asset1"]["band_descriptions"]
+
+    response = client.get("/info?assets=asset1&assets=asset2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1", "asset2"] == list(response.json())
+
+    response = client.get("/statistics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1", "asset2", "asset3"] == list(response.json())
+
+    response = client.get("/statistics?assets=asset1&assets=asset2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1", "asset2"] == list(response.json())
+
+    response = client.get("/point?coordinates=-2.0,48.0")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 3
+    assert len(response.json()["values"][0]) == 1
+
+    response = client.get("/point?coordinates=-2.0,48.0&assets=asset1&assets=asset2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 2
+
+    # Set default bands (other bands might still be available within the reader)
+    app = viz(
+        cogb1b2b3_path, reader=dataset_reader, reader_type="assets", layers=["asset1"]
+    )
+    assert app.port == 8080
+    assert app.endpoint == "http://127.0.0.1:8080"
+    client = TestClient(app.app)
+
+    response = client.get("/info")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1"] == list(response.json())
+
+    response = client.get("/info?assets=asset1&assets=asset2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1", "asset2"] == list(response.json())
+
+    response = client.get("/statistics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1"] == list(response.json())
+
+    response = client.get("/statistics?assets=asset1&assets=asset2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert ["asset1", "asset2"] == list(response.json())
+
+    response = client.get("/point?coordinates=-2.0,48.0")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 1
+
+    response = client.get("/point?coordinates=-2.0,48.0&assets=asset1&assets=asset2")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert len(response.json()["values"]) == 2
+
+
+def test_viz_mosaic():
+    """Should work as expected (create TileServer object)."""
+    src_path = cog_path
+    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": MosaicReader})
+
+    app = viz(src_path, reader=dataset_reader, reader_type="cog")
+
+    assert app.port == 8080
+    assert app.endpoint == "http://127.0.0.1:8080"
+    assert app.template_url == "http://127.0.0.1:8080/index.html"
+
+    client = TestClient(app.app)
+    response = client.get("/")
+    assert response.status_code == 404
+
+    response = client.get("/index.html")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+
+    response = client.get("/info")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+
+    response = client.get("/statistics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+
+    response = client.get("/tiles/7/64/43?rescale=1,10")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "no-cache"
+
+    with pytest.raises(NotImplementedError):
+        client.get("/preview")
+
+    with pytest.raises(NotImplementedError):
+        client.get("/crop/-2.00,48.5,-1,49.5.png")
+
+    response = client.get("/point?coordinates=-2,48")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == {"coordinates": [-2.0, 48.0], "values": [110]}

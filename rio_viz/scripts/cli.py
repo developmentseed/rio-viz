@@ -34,31 +34,8 @@ def TemporaryRasterFile(suffix=".tif"):
         os.remove(fileobj.name)
 
 
-class MbxTokenType(click.ParamType):
-    """Mapbox token type."""
-
-    name = "token"
-
-    def convert(self, value, param, ctx):
-        """Validate token."""
-        try:
-            if not value:
-                return ""
-
-            assert value.startswith("pk")
-            return value
-
-        except (AttributeError, AssertionError):
-            raise click.ClickException(
-                "Mapbox access token must be public (pk). "
-                "Please sign up at https://www.mapbox.com/signup/ to get a public token. "
-                "If you already have an account, you can retreive your "
-                "token at https://www.mapbox.com/account/."
-            )
-
-
 class NodataParamType(click.ParamType):
-    """Nodata inddex type."""
+    """Nodata index type."""
 
     name = "nodata"
 
@@ -84,16 +61,14 @@ class NodataParamType(click.ParamType):
     help="Set nodata masking values for input dataset.",
 )
 @click.option(
-    "--minzoom", type=int, help="Overwrite minzoom",
+    "--minzoom",
+    type=int,
+    help="Overwrite minzoom",
 )
 @click.option(
-    "--maxzoom", type=int, help="Overwrite maxzoom",
-)
-@click.option(
-    "--style",
-    type=click.Choice(["dark", "satellite", "basic"]),
-    default="dark",
-    help="Mapbox basemap",
+    "--maxzoom",
+    type=int,
+    help="Overwrite maxzoom",
 )
 @click.option("--port", type=int, default=8080, help="Webserver port (default: 8080)")
 @click.option(
@@ -101,13 +76,6 @@ class NodataParamType(click.ParamType):
     type=str,
     default="127.0.0.1",
     help="Webserver host url (default: 127.0.0.1)",
-)
-@click.option(
-    "--mapbox-token",
-    type=MbxTokenType(),
-    metavar="TOKEN",
-    default=lambda: os.environ.get("MAPBOX_ACCESS_TOKEN", ""),
-    help="Pass Mapbox token",
 )
 @click.option("--no-check", is_flag=True, help="Ignore COG validation")
 @click.option(
@@ -118,7 +86,8 @@ class NodataParamType(click.ParamType):
 @click.option(
     "--layers",
     type=str,
-    help="limit to specific layers (only used for MultiBand and MultiBase Readers).",
+    help="limit to specific layers (only used for MultiBand and MultiBase Readers) (e.g --layers b1 --layers b2).",
+    multiple=True,
 )
 @click.option(
     "--server-only",
@@ -139,10 +108,8 @@ def viz(
     nodata,
     minzoom,
     maxzoom,
-    style,
     port,
     host,
-    mapbox_token,
     no_check,
     reader,
     layers,
@@ -153,8 +120,10 @@ def viz(
     if reader:
         module, classname = reader.rsplit(".", 1)
         reader = getattr(importlib.import_module(module), classname)  # noqa
-        if not issubclass(reader, (BaseReader, AsyncBaseReader)):
-            warnings.warn("Reader should be a subclass of rio_tiler.io.BaseReader")
+        if not issubclass(
+            reader, (BaseReader, AsyncBaseReader, MultiBandReader, MultiBaseReader)
+        ):
+            warnings.warn(f"Invalid reader type: {type(reader)}")
 
     dataset_reader = reader or COGReader
 
@@ -174,7 +143,7 @@ def viz(
             and not cog_validate(src_path)[0]
         ):
             # create tmp COG
-            click.echo("create temporaty COG")
+            click.echo("create temporary COG")
             tmp_path = ctx.enter_context(TemporaryRasterFile())
 
             output_profile = cog_profiles.get("deflate")
@@ -192,10 +161,8 @@ def viz(
         application = app.viz(
             src_path=src_path,
             reader=dataset_reader,
-            token=mapbox_token,
             port=port,
             host=host,
-            style=style,
             config=config,
             minzoom=minzoom,
             maxzoom=maxzoom,

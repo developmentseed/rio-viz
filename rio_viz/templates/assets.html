@@ -307,48 +307,67 @@
         </div>
 
         <script>
-    var scope = {
-        assets: undefined,
-        info: undefined,
-        metadata: undefined,
-    }
+var scope = {
+    assets: undefined,
+    info: undefined,
+    metadata: undefined,
+}
 
-    mapboxgl.accessToken = '{{ mapbox_access_token  }}'
+mapboxgl.accessToken = ''
 
-    const tilejson_endpoint = '{{ tilejson_endpoint }}'
-    const info_endpoint = '{{ info_endpoint }}'
-    const stats_endpoint = '{{ stats_endpoint }}'
-    const point_endpoint = '{{ point_endpoint }}'
+const tilejson_endpoint = '{{ tilejson_endpoint }}'
+const info_endpoint = '{{ info_endpoint }}'
+const stats_endpoint = '{{ stats_endpoint }}'
+const point_endpoint = '{{ point_endpoint }}'
 
-    const dtype_ranges = {
-      'int8': [-128, 127],
-      'uint8': [0, 255],
-      'uint16': [0, 65535],
-      'int16': [-32768, 32767],
-      'uint32': [0, 4294967295],
-      'int32': [-2147483648, 2147483647],
-      'float32': [-3.4028235e+38, 3.4028235e+38],
-      'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
-    }
+const dtype_ranges = {
+  'int8': [-128, 127],
+  'uint8': [0, 255],
+  'uint16': [0, 65535],
+  'int16': [-32768, 32767],
+  'uint32': [0, 4294967295],
+  'int32': [-2147483648, 2147483647],
+  'float32': [-3.4028235e+38, 3.4028235e+38],
+  'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
+}
 
-    if ('{{ allow_3d }}' !== "True") {
-      document.getElementById('3d-point').classList.add('none')
-      document.getElementById('3d-poly').classList.add('none')
-    }
-
-let style
-if (mapboxgl.accessToken !== '') {
-    style = 'mapbox://styles/mapbox/{{ mapbox_style }}-v9'
-} else {
-    style = { version: 8, sources: {}, layers: [] }
+if ('{{ allow_3d }}' !== "True") {
+  document.getElementById('3d-point').classList.add('none')
+  document.getElementById('3d-poly').classList.add('none')
 }
 
 var map = new mapboxgl.Map({
-    container: 'map',
-    style: style,
-    center: [0, 0],
-    zoom: 1
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      'toner-lite': {
+        type: 'raster',
+        tiles: [
+          'https://stamen-tiles-a.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png',
+          'https://stamen-tiles-b.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png',
+          'https://stamen-tiles-c.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png',
+          'https://stamen-tiles-d.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png'
+        ],
+        tileSize: 256,
+        attribution:
+          'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.'
+      }
+    },
+    layers: [
+      {
+        'id': 'basemap',
+        'type': 'raster',
+        'source': 'toner-lite',
+        'minzoom': 0,
+        'maxzoom': 20
+      }
+    ]
+  },
+  center: [0, 0],
+  zoom: 1
 })
+
 
 map.on('zoom', function (e) {
     const z = (map.getZoom()).toString().slice(0, 6)
@@ -359,10 +378,10 @@ const set1bViz = () => {
     params = {}
 
     const asset = document.getElementById('asset-selector').value
-    params.asset = asset
+    params.assets = asset
 
     const bidx = document.getElementById('layer-selector').value
-    params.bidx = bidx
+    params.asset_bidx = `${asset}|${bidx}`
 
     if (['uint8','int8'].indexOf(scope.info[asset].dtype) === -1) {
         params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
@@ -393,17 +412,16 @@ const set3bViz = () => {
 
     params = {}
 
-    let assets
-    let indexes
+    let asset_params
+    let indexes_params
     if (document.getElementById("compose-switch").checked === true) {
-        assets = [r, g, b]
-        indexes = [1]
+        asset_params = [r, g, b].map(i => `assets=${i}`).join('&')
+        indexes_params =  [r, g, b].map(i => `asset_bidx=${i}|1`).join('&')
         params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
-
     } else {
         const asset = document.getElementById('asset-selector').value
-        assets = [asset]
-        indexes = [r, g, b]
+        asset_params = `assets=${asset}`
+        indexes_params =  `asset_bidx=${asset}|${r},${g},${b}`
 
         if (['uint8','int8'].indexOf(scope.info[asset].dtype) === -1) {
             params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
@@ -415,8 +433,6 @@ const set3bViz = () => {
     }
 
     const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-    const asset_params = assets.map(i => `asset=${i}`).join('&')
-    const indexes_params = indexes.map(i => `bidx=${i}`).join('&')
     let url = `{{ tilejson_endpoint }}?${url_params}&${asset_params}&${indexes_params}`
 
     map.addSource('raster', { type: 'raster', url: url, tileSize: 256 })

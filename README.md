@@ -53,36 +53,26 @@ Usage: rio viz [OPTIONS] SRC_PATH
   Rasterio Viz cli.
 
 Options:
-  --nodata NUMBER|nan        Set nodata masking values for input dataset.
-  --minzoom INTEGER          Overwrite minzoom
-  --maxzoom INTEGER          Overwrite maxzoom
-  --style [satellite|basic]  Mapbox basemap
-  --port INTEGER             Webserver port (default: 8080)
-  --host TEXT                Webserver host url (default: 127.0.0.1)
-  --mapbox-token TOKEN       Pass Mapbox token
-  --no-check                 Ignore COG validation
-  --reader TEXT              rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`
-  --layers TEXT              limit to specific layers (for Multi* readers)
-  --server-only              Launch API without opening the rio-viz web-page.
-  --config NAME=VALUE        GDAL configuration options.
-  --help                     Show this message and exit.
-
+  --nodata NUMBER|nan  Set nodata masking values for input dataset.
+  --minzoom INTEGER    Overwrite minzoom
+  --maxzoom INTEGER    Overwrite maxzoom
+  --port INTEGER       Webserver port (default: 8080)
+  --host TEXT          Webserver host url (default: 127.0.0.1)
+  --no-check           Ignore COG validation
+  --reader TEXT        rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`
+  --layers TEXT        limit to specific layers (only used for MultiBand and MultiBase Readers). (e.g --layers b1 --layers b2).
+  --server-only        Launch API without opening the rio-viz web-page.
+  --config NAME=VALUE  GDAL configuration options.
+  --help               Show this message and exit.
 ```
-
-## 3D (Experimental)
-
-rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature was added to visualize sparse data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.
-
-![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
-
 
 ## Multi Reader support
 
 rio-viz support multiple/custom reader as long they are subclass of `rio_tiler.io.base.BaseReader` or `rio_tiler.io.base.AsyncBaseReader`.
 
 ```bash
-# MultiFiles
-$ rio viz "cog_band{2,3,4}.tif" --reader rio_viz.io.MultiFilesReader
+# Multi Files as Bands
+$ rio viz "cog_band{2,3,4}.tif" --reader rio_viz.io.MultiFilesBandsReader
 
 # Simple Mosaic
 $ rio viz "tests/fixtures/mosaic_cog{1,2}.tif" --reader rio_viz.io.MosaicReader
@@ -133,6 +123,14 @@ $ curl http://127.0.0.1:8080/info | jq
 You can see the full API documentation over `http://127.0.0.1:8080/docs`
 
 ![API documentation](https://user-images.githubusercontent.com/10407788/99135093-a7a53b80-25ee-11eb-98ba-0ce932775791.png)
+
+
+## 3D (Experimental)
+
+rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature was added to visualize sparse data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.
+
+![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
+
 
 ## Contribution & Development
 

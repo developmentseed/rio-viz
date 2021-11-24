@@ -4,13 +4,17 @@ Create an AsyncBaseReader from a BaseReader subclass.
 
 """
 
-from typing import Any, Coroutine, Dict, List, Tuple, Type
+from typing import Any, Coroutine, Dict, List, Optional, Tuple, Type, Union
 
 import attr
-import morecantile
-from rio_tiler import constants
-from rio_tiler.io import AsyncBaseReader, BaseReader, COGReader
-from rio_tiler.models import ImageData, ImageStatistics, Info, Metadata
+from rio_tiler.io import (
+    AsyncBaseReader,
+    BaseReader,
+    COGReader,
+    MultiBandReader,
+    MultiBaseReader,
+)
+from rio_tiler.models import BandStatistics, ImageData, Info
 from starlette.concurrency import run_in_threadpool
 
 
@@ -18,20 +22,31 @@ from starlette.concurrency import run_in_threadpool
 class AsyncReader(AsyncBaseReader):
     """Async Reader class."""
 
-    src_path: str = attr.ib()
-    tms: morecantile.TileMatrixSet = attr.ib(default=constants.WEB_MERCATOR_TMS)
+    dataset: Union[Type[BaseReader], Type[MultiBandReader], Type[MultiBaseReader]]
 
-    reader: Type[BaseReader] = COGReader
+    assets: Optional[List[str]]
+    bands: Optional[List[str]]
+    colormap: Optional[Dict]
+
+    reader: Union[
+        Type[BaseReader],
+        Type[MultiBandReader],
+        Type[MultiBaseReader],
+    ] = COGReader
 
     def __attrs_post_init__(self):
         """PostInit."""
-        self.dataset = self.reader(self.src_path)
+        self.dataset = self.reader(self.input)
         self.bounds = self.dataset.bounds
+        self.crs = self.dataset.crs
+
         self.minzoom = self.dataset.minzoom
         self.maxzoom = self.dataset.maxzoom
 
+        # MultiBase or MultiBand
         self.assets = getattr(self.dataset, "assets", None)
         self.bands = getattr(self.dataset, "bands", None)
+
         self.colormap = getattr(self.dataset, "colormap", None)
 
         return self
@@ -49,17 +64,12 @@ class AsyncReader(AsyncBaseReader):
         """Return Dataset's info."""
         return await run_in_threadpool(self.dataset.info, **kwargs)  # type: ignore
 
-    async def stats(
-        self, pmin: float = 2.0, pmax: float = 98.0, **kwargs: Any
-    ) -> Coroutine[Any, Any, Dict[str, ImageStatistics]]:
+    async def statistics(
+        self,
+        **kwargs: Any,
+    ) -> Coroutine[Any, Any, Dict[str, BandStatistics]]:
         """Return Dataset's statistics."""
-        return await run_in_threadpool(self.dataset.stats, pmin, pmax, **kwargs)  # type: ignore
-
-    async def metadata(
-        self, pmin: float = 2.0, pmax: float = 98.0, **kwargs: Any
-    ) -> Coroutine[Any, Any, Metadata]:
-        """Return Dataset's statistics."""
-        return await run_in_threadpool(self.dataset.metadata, pmin, pmax, **kwargs)  # type: ignore
+        return await run_in_threadpool(self.dataset.statistics, **kwargs)  # type: ignore
 
     async def tile(
         self, tile_x: int, tile_y: int, tile_z: int, **kwargs: Any
