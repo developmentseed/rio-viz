@@ -1,7 +1,7 @@
 
-## 0.8.0 (TBD)
+## 0.8.0 (2021-11-30)
 
-* update to new titiler/rio-tiler/rio-cogeo version.
+* update to new titiler/rio-tiler/rio-cogeo version
 * remove Mapbox maps and switch to `stamen` basemap
 * remove python3.6 support
 
