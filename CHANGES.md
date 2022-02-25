@@ -1,4 +1,8 @@
 
+## 0.9.1 (2022-02-25)
+
+* add `color-formula` in viz
+
 ## 0.9.0 (2022-02-25)
 
 * update titiler requirement and fix viewer bugs

@@ -262,6 +262,7 @@
                 <option value=gist_earth>Earth</option>
                 <option value=ocean>Ocean</option>
                 <option value=terrain>Terrain</option>
+                <option value=inferno>Inferno</option>
               </select>
               <div class='select-arrow color-black'></div>
             </div>
@@ -276,6 +277,13 @@
             </div>
           </div>
         </section>
+
+        <!-- Color Formula -->
+        <div id='cformula-section' class='px6 py6'>
+          <div class='txt-h5 mb6 color-black'>Color Formula</div>
+          <input id="ColorFormulaValue" class='input input--s w-full color-black' value='' />
+          <button id="updateColor" class='btn bts--xs btn--stroke bg-darken25-on-hover txt-s color-black mt6'>Apply</button>
+        </div>
 
         <!-- Min/Max -->
         <div id="minmax-data" class='px6 py6 none'>
@@ -388,6 +396,10 @@ const set1bViz = () => {
         params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
       }
 
+      if (document.getElementById('ColorFormulaValue').value !== '') {
+        params.color_formula = document.getElementById('ColorFormulaValue').value
+      }
+
       const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
       if (cmap.value !== 'b&w') params.colormap_name = cmap.value
 
@@ -428,6 +440,11 @@ const set3bViz = () => {
   if (['uint8','int8'].indexOf(scope.data_type) === -1) {
     params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
   }
+
+  if (document.getElementById('ColorFormulaValue').value !== '') {
+    params.color_formula = document.getElementById('ColorFormulaValue').value
+  }
+
   let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
   if (url_params !== '') url_params = `${url_params}&`
 
@@ -771,16 +788,19 @@ document.getElementById('viz-selector').addEventListener('change', (e) => {
   switch (e.target.value) {
     case 'raster':
       document.getElementById('colormap-section').classList.remove('none')
+      document.getElementById('cformula-section').classList.remove('none')
       document.getElementById('extrusion-section').classList.add('none')
       break
 
     case 'point':
       document.getElementById('colormap-section').classList.add('none')
+      document.getElementById('cformula-section').classList.add('none')
       document.getElementById('extrusion-section').classList.add('none')
       break
 
     case 'polygon':
       document.getElementById('colormap-section').classList.add('none')
+      document.getElementById('cformula-section').classList.add('none')
       document.getElementById('extrusion-section').classList.remove('none')
       break
 
@@ -817,6 +837,10 @@ document.getElementById('colormap-selector').addEventListener('change', () => {
 })
 
 document.getElementById('btn-rescale').addEventListener('click', () => {
+  updateViz()
+})
+
+document.getElementById('updateColor').addEventListener('click', () => {
   updateViz()
 })
 
