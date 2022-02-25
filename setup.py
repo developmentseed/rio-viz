@@ -8,8 +8,8 @@ with open("README.md") as f:
 # Runtime requirements.
 inst_reqs = [
     "braceexpand",
-    "rio-cogeo>=3.0",
-    "titiler.core>=0.4,<0.5",
+    "rio-cogeo>=3.1",
+    "titiler.core>=0.5,<0.6",
     "starlette-cramjam>=0.1.0,<0.2",
     "uvicorn",
 ]
@@ -22,7 +22,6 @@ extra_reqs = {
 
 setup(
     name="rio-viz",
-    version="0.8.0",
     python_requires=">=3.7",
     description=u"Visualize Cloud Optimized GeoTIFF in browser",
     long_description=long_description,

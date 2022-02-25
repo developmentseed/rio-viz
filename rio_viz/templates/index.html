@@ -472,7 +472,7 @@ const addLayer = (layerType) => {
   if (scope.dataset_statistics) addHisto1Band()
 
   const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-  const propName = active_layer.value
+  const propName = active_layer.getAttribute("band")
   const exag = parseFloat(document.getElementById('ex-value').value)
 
   switch (layerType) {
@@ -658,7 +658,7 @@ const addHisto3Bands = () => {
 }
 
 const addHisto1Band = () => {
-  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("name")]
+  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")]
 
   let counts = stats.histogram[0]
   const sum = counts.reduce(function(a, b){
@@ -945,10 +945,9 @@ map.on('load', () => {
         })
         .then(data => {
           let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
-          let values = Object.keys(data.value)
-          for (var i = 0; i < values.length; i++) {
-            let value = data.value[values[i]]
-            let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
+          for (var i = 0; i < scope.band_descriptions.length; i++) {
+            let value = data.values[i]
+            let key = scope.band_descriptions[i][1] || `band ${scope.band_descriptions[i][0]}`
             html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
           }
           html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`

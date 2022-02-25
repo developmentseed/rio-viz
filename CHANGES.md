@@ -1,4 +1,8 @@
 
+## 0.9.0 (2022-02-25)
+
+* update titiler requirement and fix viewer bugs
+
 ## 0.8.0 (2021-11-30)
 
 * update to new titiler/rio-tiler/rio-cogeo version
