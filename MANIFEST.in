@@ -1,3 +1,0 @@
-include rio_viz/templates/*
-include rio_viz/src/js/*
-include rio_viz/src/css/*
