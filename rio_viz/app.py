@@ -17,6 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
+from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
 from starlette_cramjam.middleware import CompressionMiddleware
@@ -49,6 +50,7 @@ except ModuleNotFoundError:
     has_mvt = False
     pixels_encoder = None
 
+src_dir = str(pathlib.Path(__file__).parent.joinpath("src"))
 template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
 
@@ -128,6 +130,7 @@ class viz:
         self.register_middleware()
         self.register_routes()
         self.app.include_router(self.router)
+        self.app.mount("/static", StaticFiles(directory=src_dir), name="static")
 
     def register_middleware(self):
         """Register Middleware to the FastAPI app."""
