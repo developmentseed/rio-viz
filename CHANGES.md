@@ -3,6 +3,7 @@
 
 * better handle data with bbox crossing the antimeridian limit
 * include js and css code within the package to enable full offline mode
+* switch to pyproject.toml
 
 ## 0.9.1 (2022-02-25)
 
