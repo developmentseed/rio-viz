@@ -1,4 +1,8 @@
 
+## 0.9.2 (TBD)
+
+* better handle data with bbox crossing the antimeridian limit
+
 ## 0.9.1 (2022-02-25)
 
 * add `color-formula` in viz
