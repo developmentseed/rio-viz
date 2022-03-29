@@ -74,7 +74,7 @@ class MosaicReader(BaseReader):
         reverse: bool = False,
         **kwargs: Any,
     ) -> ImageData:
-        """Get Tile"""
+        """Get Tile."""
         mosaic_assets = (
             list(reversed(list(self.datasets))) if reverse else list(self.datasets)
         )
@@ -150,13 +150,13 @@ class MosaicReader(BaseReader):
     # Not Implemented methods
     # BaseReader required those method to be implemented
     def preview(self, *args, **kwargs):
-        """PlaceHolder for BaseReader.preview."""
+        """Placeholder for BaseReader.preview."""
         raise NotImplementedError
 
     def part(self, *args, **kwargs):
-        """PlaceHolder for BaseReader.part."""
+        """Placeholder for BaseReader.part."""
         raise NotImplementedError
 
     def feature(self, *args, **kwargs):
-        """PlaceHolder for BaseReader.feature."""
+        """Placeholder for BaseReader.feature."""
         raise NotImplementedError
