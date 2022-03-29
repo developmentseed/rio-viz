@@ -1061,11 +1061,15 @@ map.on('load', () => {
       document.getElementById('hide-arrow').classList.toggle('off')
       document.getElementById('menu').classList.toggle('off')
 
-      const ll = truncate_lnglat(data.bounds[0], data.bounds[1])
-      const ur = truncate_lnglat(data.bounds[2], data.bounds[3])
-      map.fitBounds([ll, ur])
-
-      addAOI(data.bounds)
+      let bounds = data.bounds
+      // Bounds crossing dateline
+      if (bounds[0] > bounds[2]) {
+        bounds[0] = bounds[0] - 360
+      }
+      map.fitBounds(
+        [[bounds[0], bounds[1]], [bounds[2], bounds[3]]]
+      )
+      addAOI(bounds)
 
       if (nbands === 1) {
         document.getElementById('3b').classList.add('disabled')

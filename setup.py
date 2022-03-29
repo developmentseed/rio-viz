@@ -23,7 +23,7 @@ extra_reqs = {
 setup(
     name="rio-viz",
     python_requires=">=3.7",
-    description=u"Visualize Cloud Optimized GeoTIFF in browser",
+    description="Visualize Cloud Optimized GeoTIFF in browser",
     long_description=long_description,
     long_description_content_type="text/markdown",
     classifiers=[
@@ -36,7 +36,7 @@ setup(
         "Topic :: Scientific/Engineering :: GIS",
     ],
     keywords="COG COGEO Rasterio GIS MVT",
-    author=u"Vincent Sarago",
+    author="Vincent Sarago",
     author_email="vincent@developmentseed.org",
     url="https://github.com/developmentseed/rio-viz",
     packages=find_packages(exclude=["tests"]),
