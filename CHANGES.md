@@ -1,5 +1,5 @@
 
-## 0.9.2 (TBD)
+## 0.9.2 (2022-03-29)
 
 * better handle data with bbox crossing the antimeridian limit
 * include js and css code within the package to enable full offline mode
