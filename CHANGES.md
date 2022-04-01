@@ -1,4 +1,8 @@
 
+## 0.9.3 (2022-04-01)
+
+* fix frontend click/point interaction for dataset crossing the antimeridian line
+
 ## 0.9.2 (2022-03-29)
 
 * better handle data with bbox crossing the antimeridian limit

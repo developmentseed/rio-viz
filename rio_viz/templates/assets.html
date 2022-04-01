@@ -770,20 +770,6 @@ const addAOI = (bounds) => {
     return
 }
 
-const truncate_lnglat = (lng, lat) => {
-    if (lng > 180.0) {
-        lng = 180.0
-    } else if (lng < -180.0) {
-        lng = -180.0
-    }
-    if (lat > 90.0) {
-        lat = 90.0
-    } else if (lat < -90.0) {
-        lat = -90.0
-    }
-    return [lng, lat]
-}
-
 const updateUI = () => {
     const is_checked = document.getElementById("compose-switch").checked
 
@@ -909,7 +895,7 @@ const updateUI = () => {
         document.getElementById('data-min').value = mm[0]
         document.getElementById('data-max').value = mm[1]
 
-        let bounds = data.bounds
+        let bounds = [...info.bounds]
         // Bounds crossing dateline
         if (bounds[0] > bounds[2]) {
             bounds[0] = bounds[0] - 360
@@ -935,40 +921,45 @@ const updateUI = () => {
 map.on('load', () => {
 
     // // we cannot click on raster layer (mapbox-gl bug)
-    // map.on('click', (e) => {
-    //     if (!map.getLayer('raster')) return
-    //     const bounds = map.getSource('raster').bounds
-    //     if (
-    //         (e.lngLat.lng >= bounds[0] && e.lngLat.lng <= bounds[2]) &&
-    //         (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
-    //     ) {
-    //         const coord = `${e.lngLat.lng},${e.lngLat.lat}`
-    //         fetch(`${point_endpoint}?coordinates=${coord}`)
-    //         .then(res => {
-    //             if (res.ok) return res.json()
-    //             throw new Error('Network response was not ok.');
-    //         })
-    //         .then(data => {
-    //             let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
-    //             let values = Object.keys(data.value)
-    //             for (var i = 0; i < values.length; i++) {
-    //             let value = data.value[values[i]]
-    //             let key = scope.metadata.band_descriptions[i][1] || scope.metadata.band_descriptions[i][0]
-    //             html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
-    //             }
-    //             html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
-    //             html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
-    //             html += '</table>'
-    //             new mapboxgl.Popup()
-    //             .setLngLat(e.lngLat)
-    //             .setHTML(html)
-    //             .addTo(map)
-    //         })
-    //         .catch(err => {
-    //             console.warn(err)
-    //         })
-    //     }
-    //})
+    map.on('click', (e) => {
+        if (!map.getLayer('raster')) return
+        const bounds = map.getSource('raster').bounds
+        if (
+            (e.lngLat.lng >= bounds[0] && e.lngLat.lng <= bounds[2]) &&
+            (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
+        ) {
+            const coord = `${e.lngLat.lng},${e.lngLat.lat}`
+            fetch(`${point_endpoint}?coordinates=${coord}`)
+            .then(res => {
+                if (res.ok) return res.json()
+                throw new Error('Network response was not ok.');
+            })
+            .then(data => {
+                console.log(data)
+                let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
+                for (var i = 0; i < data.values.length; i++) {
+                    let asset = scope.assets[i]
+                    let info = scope.info[asset]
+                    let values = data.values[i]
+                    for (var j = 0; j < values.length; j++) {
+                        let value = values[j]
+                        let key = info.band_descriptions[j][1] || info.band_descriptions[j][0]
+                        html += `<tr><td class="align-l">${asset}-${key}</td><td class="px3 align-r">${value}</td></tr>`
+                    }
+                }
+                html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
+                html += `<tr><td class="align-l">lat</td><td class="px3 align-r">${e.lngLat.lat.toString().slice(0, 7)}</td></tr>`
+                html += '</table>'
+                new mapboxgl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(html)
+                    .addTo(map)
+            })
+            .catch(err => {
+                console.warn(err)
+            })
+        }
+    })
 
 
     fetch(`${info_endpoint}`)

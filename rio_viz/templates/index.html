@@ -903,20 +903,6 @@ const addAOI = (bounds) => {
   return
 }
 
-const truncate_lnglat = (lng, lat) => {
-  if (lng > 180.0) {
-    lng = 180.0
-  } else if (lng < -180.0) {
-    lng = -180.0
-  }
-  if (lat > 90.0) {
-    lat = 90.0
-  } else if (lat < -90.0) {
-    lat = -90.0
-  }
-  return [lng, lat]
-}
-
 map.on('load', () => {
   map.on('mousemove', (e) => {
     if (!map.getLayer('mvt')) return
@@ -950,14 +936,22 @@ map.on('load', () => {
       .addTo(map)
   })
 
+  const intersects = (ll, bounds) => {
+    if (bounds[0] > bounds[2]) {
+      bounds[0] = bounds[0] - 360
+    }
+    return (
+      (ll.lng >= bounds[0] && ll.lng <= bounds[2]) && (ll.lat >= bounds[1] && ll.lat <= bounds[3]) ||
+      (ll.lng >= bounds[0] + 360 && ll.lng <= bounds[2] + 360) && (ll.lat >= bounds[1] && ll.lat <= bounds[3])
+    )
+  }
+
   // we cannot click on raster layer (mapbox-gl bug)
   map.on('click', (e) => {
     if (!map.getLayer('raster')) return
-    const bounds = map.getSource('raster').bounds
-    if (
-      (e.lngLat.lng >= bounds[0] && e.lngLat.lng <= bounds[2]) &&
-      (e.lngLat.lat >= bounds[1] && e.lngLat.lat <= bounds[3])
-    ) {
+
+    let bounds = [...map.getSource('raster').bounds]
+    if (intersects(e.lngLat, bounds)) {
       const coord = `${e.lngLat.lng},${e.lngLat.lat}`
       fetch(`${point_endpoint}?coordinates=${coord}`)
         .then(res => {
@@ -1059,7 +1053,7 @@ map.on('load', () => {
       document.getElementById('hide-arrow').classList.toggle('off')
       document.getElementById('menu').classList.toggle('off')
 
-      let bounds = data.bounds
+      let bounds = [...data.bounds]
       // Bounds crossing dateline
       if (bounds[0] > bounds[2]) {
         bounds[0] = bounds[0] - 360
