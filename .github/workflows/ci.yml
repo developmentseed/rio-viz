@@ -7,13 +7,15 @@ on:
     tags:
     - '*'
   pull_request:
+env:
+  LATEST_PY_VERSION: '3.9'
 
 jobs:
   tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9]
+        python-version: ['3.7', '3.8', '3.9']
 
     steps:
       - uses: actions/checkout@v2
@@ -25,25 +27,24 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .["mvt,test"]
+          python -m pip install .["mvt,test"]
 
       - name: Run tests
         run: python -m pytest --cov rio_viz --cov-report xml --cov-report term-missing
 
-      # Run pre-commit (only for python-3.8)
       - name: run pre-commit
-        if: matrix.python-version == 3.8
+        if: ${{ matrix.python-version == env.LATEST_PY_VERSION }}
         run: |
           python -m pip install pre-commit
           pre-commit run --all-files
 
       - name: Upload Results
-        if: success()
+        if: ${{ matrix.python-version == env.LATEST_PY_VERSION }}
         uses: codecov/codecov-action@v1
         with:
           file: ./coverage.xml
           flags: unittests
-          name: ${{ matrix.platform }}-${{ matrix.tox-env }}
+          name: ${{ matrix.python-version }}
           fail_ci_if_error: false
 
   publish:
@@ -55,7 +56,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: ${{ env.LATEST_PY_VERSION }}
 
       - name: Install dependencies
         run: |
