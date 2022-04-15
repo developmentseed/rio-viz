@@ -647,6 +647,12 @@ class viz:
             )
 
         @self.router.get(
+            "/",
+            responses={200: {"description": "Simple COG viewer."}},
+            response_class=HTMLResponse,
+            tags=["Viewer"],
+        )
+        @self.router.get(
             "/index.html",
             responses={200: {"description": "Simple COG viewer."}},
             response_class=HTMLResponse,
