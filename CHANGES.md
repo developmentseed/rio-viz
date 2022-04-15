@@ -1,4 +1,8 @@
 
+## 0.9.4 (2022-04-15)
+
+* add `/` as path for the viewer
+
 ## 0.9.3 (2022-04-01)
 
 * fix frontend click/point interaction for dataset crossing the antimeridian line
