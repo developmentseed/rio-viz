@@ -33,7 +33,8 @@ def test_viz():
 
     client = TestClient(app.app)
     response = client.get("/")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
 
     response = client.get("/index.html")
     assert response.status_code == 200
@@ -377,7 +378,8 @@ def test_viz_mosaic():
 
     client = TestClient(app.app)
     response = client.get("/")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
 
     response = client.get("/index.html")
     assert response.status_code == 200
