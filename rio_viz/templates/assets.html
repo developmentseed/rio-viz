@@ -331,11 +331,6 @@ const dtype_ranges = {
   'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
 }
 
-if ('{{ allow_3d }}' !== "True") {
-  document.getElementById('3d-point').classList.add('none')
-  document.getElementById('3d-poly').classList.add('none')
-}
-
 var map = new mapboxgl.Map({
   container: 'map',
   style: {

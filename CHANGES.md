@@ -1,4 +1,8 @@
 
+## Unreleased
+
+* fix issue for MultiBaseReader (`assets`) viewer
+
 ## 0.9.4 (2022-04-15)
 
 * add `/` as path for the viewer
