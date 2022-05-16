@@ -1,10 +1,8 @@
 
-## Unreleased
+## 0.9.4 (2022-05-16)
 
 * fix issue for MultiBaseReader (`assets`) viewer
-
-## 0.9.4 (2022-04-15)
-
+* update titiler.core requirement to `>=0.5,<0.7`
 * add `/` as path for the viewer
 
 ## 0.9.3 (2022-04-01)
