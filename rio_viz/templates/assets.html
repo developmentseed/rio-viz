@@ -439,9 +439,9 @@ const set3bViz = () => {
 }
 
 const addHisto3Bands = () => {
-      const r = document.getElementById('r-selector').value
-      const g = document.getElementById('g-selector').value
-      const b = document.getElementById('b-selector').value
+      const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
+      const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
+      const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
 
     let rStats
     let gStats
@@ -546,7 +546,7 @@ const addHisto3Bands = () => {
 
 const addHisto1Band = () => {
     const asset = document.getElementById('asset-selector').value
-    const band = document.getElementById('layer-selector').value
+    const band = document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")
     const stats = scope.metadata[asset][band]
 
     let counts = stats.histogram[0]

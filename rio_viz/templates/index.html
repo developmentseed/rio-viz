@@ -557,9 +557,9 @@ const addLayer = (layerType) => {
 }
 
 const addHisto3Bands = () => {
-  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("name")
-  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("name")
-  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("name")
+  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
+  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
+  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
 
   const rStats = scope.dataset_statistics[r]
   const gStats = scope.dataset_statistics[g]

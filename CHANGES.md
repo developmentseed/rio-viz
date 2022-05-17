@@ -1,4 +1,8 @@
 
+## 0.9.5 (2022-05-17)
+
+* Fix viewers. Statistics wasn't being displayed for raster with band names (instead of indexes number).
+
 ## 0.9.4 (2022-05-16)
 
 * fix issue for MultiBaseReader (`assets`) viewer

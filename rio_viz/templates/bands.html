@@ -556,9 +556,9 @@ const addLayer = (layerType) => {
 }
 
 const addHisto3Bands = () => {
-  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("name")
-  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("name")
-  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("name")
+  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
+  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
+  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
 
   const rStats = scope.dataset_statistics[r]
   const gStats = scope.dataset_statistics[g]
@@ -671,7 +671,7 @@ const addHisto3Bands = () => {
     }
 
 const addHisto1Band = () => {
-  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("name")]
+  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")]
 
   let counts = stats.histogram[0]
   const sum = counts.reduce(function(a, b){
