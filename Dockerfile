@@ -8,7 +8,7 @@ COPY rio_viz rio_viz
 COPY pyproject.toml pyproject.toml
 COPY README.md README.md
 
-RUN pip install . rasterio>=1.3a3 --no-cache-dir --upgrade
+RUN pip install . rasterio>=1.3b1 --no-cache-dir --upgrade
 
 # We add additional readers provided by rio-tiler-pds
 RUN pip install rio-tiler-pds

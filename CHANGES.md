@@ -1,4 +1,8 @@
 
+## 0.9.6 (2022-06-14)
+
+* update `titiler` and `starlette-cramjam` requirements
+
 ## 0.9.5 (2022-05-17)
 
 * Fix viewers. Statistics wasn't being displayed for raster with band names (instead of indexes number).
