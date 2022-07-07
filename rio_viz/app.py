@@ -22,6 +22,8 @@ from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
 from starlette_cramjam.middleware import CompressionMiddleware
 
+from rio_viz.algorithm import AVAILABLE_ALGORITHM, AlgorithmMetadata
+from rio_viz.dependency import PostProcessParams
 from rio_viz.resources.enums import RasterFormat, VectorTileFormat, VectorTileType
 
 from titiler.core.dependencies import (
@@ -36,7 +38,6 @@ from titiler.core.dependencies import (
     HistogramParams,
     ImageParams,
     ImageRenderingParams,
-    PostProcessParams,
     StatisticsParams,
 )
 from titiler.core.models.mapbox import TileJSON
@@ -295,19 +296,26 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                data = await src_dst.preview(
+                img = await src_dst.preview(
                     **layer_params,
                     **dataset_params,
                     **img_params,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
+            if postprocess_params.image_process:
+                img = postprocess_params.image_process.apply(img)
+
+            if postprocess_params.rescale:
+                img.rescale(postprocess_params.rescale)
+
+            if postprocess_params.color_formula:
+                img.apply_color_formula(postprocess_params.color_formula)
+
             if not format:
-                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
+                format = RasterFormat.jpeg if img.mask.all() else RasterFormat.png
 
-            image = data.post_process(**postprocess_params)
-
-            content = image.render(
+            content = img.render(
                 img_format=format.driver,
                 colormap=colormap or dst_colormap,
                 **format.profile,
@@ -360,7 +368,7 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                data = await src_dst.part(
+                img = await src_dst.part(
                     [minx, miny, maxx, maxy],
                     **layer_params,
                     **dataset_params,
@@ -368,9 +376,16 @@ class viz:
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
-            image = data.post_process(**postprocess_params)
+            if postprocess_params.image_process:
+                img = postprocess_params.image_process.apply(img)
 
-            content = image.render(
+            if postprocess_params.rescale:
+                img.rescale(postprocess_params.rescale)
+
+            if postprocess_params.color_formula:
+                img.apply_color_formula(postprocess_params.color_formula)
+
+            content = img.render(
                 img_format=format.driver,
                 colormap=colormap or dst_colormap,
                 **format.profile,
@@ -415,17 +430,24 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                data = await src_dst.feature(
+                img = await src_dst.feature(
                     geom.dict(exclude_none=True), **layer_params, **dataset_params
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
+            if postprocess_params.image_process:
+                img = postprocess_params.image_process.apply(img)
+
+            if postprocess_params.rescale:
+                img.rescale(postprocess_params.rescale)
+
+            if postprocess_params.color_formula:
+                img.apply_color_formula(postprocess_params.color_formula)
+
             if not format:
-                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
+                format = RasterFormat.jpeg if img.mask.all() else RasterFormat.png
 
-            image = data.post_process(**postprocess_params)
-
-            content = image.render(
+            content = img.render(
                 img_format=format.driver,
                 colormap=colormap or dst_colormap,
                 **format.profile,
@@ -475,7 +497,7 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                tile_data = await src_dst.tile(
+                img = await src_dst.tile(
                     x,
                     y,
                     z,
@@ -502,22 +524,27 @@ class viz:
                 _mvt_encoder = partial(run_in_threadpool, pixels_encoder)
 
                 content = await _mvt_encoder(
-                    tile_data.data,
-                    tile_data.mask,
-                    tile_data.band_names,
+                    img.data,
+                    img.mask,
+                    img.band_names,
                     feature_type=feature_type.value,
                 )  # type: ignore
 
             # Raster Tile
             else:
+                if postprocess_params.image_process:
+                    img = postprocess_params.image_process.apply(img)
+
+                if postprocess_params.rescale:
+                    img.rescale(postprocess_params.rescale)
+
+                if postprocess_params.color_formula:
+                    img.apply_color_formula(postprocess_params.color_formula)
+
                 if not format:
-                    format = (
-                        RasterFormat.jpeg if tile_data.mask.all() else RasterFormat.png
-                    )
+                    format = RasterFormat.jpeg if img.mask.all() else RasterFormat.png
 
-                image = tile_data.post_process(**postprocess_params)
-
-                content = image.render(
+                content = img.render(
                     img_format=format.driver,
                     colormap=colormap or dst_colormap,
                     **format.profile,
@@ -645,6 +672,35 @@ class viz:
                 },
                 media_type="application/xml",
             )
+
+        @self.router.get(
+            "/algorithm",
+            response_model=List[AlgorithmMetadata],
+        )
+        def algo(request: Request):
+            """Handle /algorithm."""
+            algos = []
+            for k, v in AVAILABLE_ALGORITHM.items():
+                props = v.schema()["properties"]
+                ins = {
+                    k.replace("input_", ""): v
+                    for k, v in props.items()
+                    if k.startswith("input_")
+                }
+                outs = {
+                    k.replace("output_", ""): v
+                    for k, v in props.items()
+                    if k.startswith("output_")
+                }
+                params = {
+                    k: v
+                    for k, v in props.items()
+                    if not k.startswith("input_") and not k.startswith("output_")
+                }
+                algos.append(
+                    AlgorithmMetadata(name=k, inputs=ins, outputs=outs, params=params)
+                )
+            return algos
 
         @self.router.get(
             "/",
