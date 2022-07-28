@@ -124,6 +124,44 @@ You can see the full API documentation over `http://127.0.0.1:8080/docs`
 
 ![API documentation](https://user-images.githubusercontent.com/10407788/99135093-a7a53b80-25ee-11eb-98ba-0ce932775791.png)
 
+## In Notebook environment
+
+Thanks to the awesome [server-thread](https://github.com/banesullivan/server-thread) we can use `rio-viz` application in Notebook environment.
+
+```python
+import httpx
+from folium import Map, TileLayer
+
+from rio_viz.app import Client
+
+# Create rio-viz Client (using server-thread to launch backgroud task)
+client = Client("https://data.geo.admin.ch/ch.swisstopo.swissalti3d/swissalti3d_2019_2573-1085/swissalti3d_2019_2573-1085_0.5_2056_5728.tif")
+
+r = httpx.get(
+    f"{client.endpoint}/tilejson.json",
+    params = {
+        "rescale": "1600,2000",  # from the info endpoint
+        "colormap_name": "terrain",
+    }
+).json()
+
+bounds = r["bounds"]
+m = Map(
+    location=((bounds[1] + bounds[3]) / 2,(bounds[0] + bounds[2]) / 2),
+    zoom_start=r["minzoom"]
+)
+
+aod_layer = TileLayer(
+    tiles=r["tiles"][0],
+    opacity=1,
+    attr="Yo!!"
+)
+aod_layer.add_to(m)
+m
+```
+![](https://user-images.githubusercontent.com/10407788/181458278-9ae197ae-5a30-469d-834f-36c6d8a57395.jpg)
+
+
 ## 3D (Experimental)
 
 rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature was added to visualize sparse data stored as raster but will also work for dense array. This is highly experimental and might be slow to render in certain browser and/or for big rasters.

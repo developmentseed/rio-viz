@@ -10,8 +10,9 @@ import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
 from geojson_pydantic.features import Feature
-from rio_tiler.io import AsyncBaseReader
+from rio_tiler.io import AsyncBaseReader, COGReader
 from rio_tiler.models import BandStatistics, Info
+from server_thread import ServerManager, ServerThread
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -22,6 +23,7 @@ from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
 from starlette_cramjam.middleware import CompressionMiddleware
 
+from rio_viz.compat import AsyncReader
 from rio_viz.resources.enums import RasterFormat, VectorTileFormat, VectorTileType
 
 from titiler.core.dependencies import (
@@ -56,6 +58,8 @@ templates = Jinja2Templates(directory=template_dir)
 
 TileFormat = Union[RasterFormat, VectorTileFormat]
 
+default_reader = type("AsyncReader", (AsyncReader,), {"reader": COGReader})
+
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
     """MiddleWare to add CacheControl in response headers."""
@@ -83,7 +87,7 @@ class viz:
     """Creates a very minimal slippy map tile server using fastAPI + Uvicorn."""
 
     src_path: str = attr.ib()
-    reader: Type[AsyncBaseReader] = attr.ib()
+    reader: Type[AsyncBaseReader] = attr.ib(default=default_reader)
 
     app: FastAPI = attr.ib(default=attr.Factory(FastAPI))
 
@@ -699,3 +703,25 @@ class viz:
         """Start tile server."""
         with rasterio.Env(**self.config):
             uvicorn.run(app=self.app, host=self.host, port=self.port, log_level="info")
+
+
+@attr.s
+class Client(viz):
+    """Create a Client usable in Jupyter Notebook."""
+
+    server: ServerThread = attr.ib(init=False)
+
+    def __attrs_post_init__(self):
+        """Update App."""
+        super().__attrs_post_init__()
+
+        key = f"{self.host}:{self.port}"
+        if ServerManager.is_server_live(key):
+            ServerManager.shutdown_server(key)
+
+        self.server = ServerThread(self.app, port=self.port, host=self.host)
+        ServerManager.add_server(key, self.server)
+
+    def shutdown(self):
+        """Stop server"""
+        ServerManager.shutdown_server(f"{self.host}:{self.port}")
