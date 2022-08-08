@@ -59,7 +59,7 @@ Options:
   --port INTEGER       Webserver port (default: 8080)
   --host TEXT          Webserver host url (default: 127.0.0.1)
   --no-check           Ignore COG validation
-  --reader TEXT        rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`
+  --reader TEXT        rio-tiler Reader (BaseReader). Default is `rio_tiler.io.COGReader`
   --layers TEXT        limit to specific layers (only used for MultiBand and MultiBase Readers). (e.g --layers b1 --layers b2).
   --server-only        Launch API without opening the rio-viz web-page.
   --config NAME=VALUE  GDAL configuration options.
@@ -68,7 +68,7 @@ Options:
 
 ## Multi Reader support
 
-rio-viz support multiple/custom reader as long they are subclass of `rio_tiler.io.base.BaseReader` or `rio_tiler.io.base.AsyncBaseReader`.
+rio-viz support multiple/custom reader as long they are subclass of `rio_tiler.io.base.BaseReader`.
 
 ```bash
 # Multi Files as Bands
@@ -91,10 +91,6 @@ $ rio viz LC08_L1TP_013031_20130930_20170308_01_T1 \
 rio viz https://earth-search.aws.element84.com/v0/collections/sentinel-s2-l2a-cogs/items/S2A_34SGA_20200318_0_L2A \
   --reader rio_tiler.io.STACReader \
   --layers B04,B03,B02
-
-# aiocogeo
-$ rio viz https://naipblobs.blob.core.windows.net/naip/v002/al/2019/al_60cm_2019/30087/m_3008701_ne_16_060_20191115.tif \
-  --reader aiocogeo.tiler.COGTiler
 ```
 
 ## RestAPI
@@ -123,6 +119,49 @@ $ curl http://127.0.0.1:8080/info | jq
 You can see the full API documentation over `http://127.0.0.1:8080/docs`
 
 ![API documentation](https://user-images.githubusercontent.com/10407788/99135093-a7a53b80-25ee-11eb-98ba-0ce932775791.png)
+
+## In Notebook environment
+
+Thanks to the awesome [server-thread](https://github.com/banesullivan/server-thread) we can use `rio-viz` application in Notebook environment.
+
+```python
+import time
+
+import httpx
+from folium import Map, TileLayer
+
+from rio_viz.app import Client
+
+# Create rio-viz Client (using server-thread to launch backgroud task)
+client = Client("https://data.geo.admin.ch/ch.swisstopo.swissalti3d/swissalti3d_2019_2573-1085/swissalti3d_2019_2573-1085_0.5_2056_5728.tif")
+
+# Gives some time for the server to setup
+time.sleep(1)
+
+r = httpx.get(
+    f"{client.endpoint}/tilejson.json",
+    params = {
+        "rescale": "1600,2000",  # from the info endpoint
+        "colormap_name": "terrain",
+    }
+).json()
+
+bounds = r["bounds"]
+m = Map(
+    location=((bounds[1] + bounds[3]) / 2,(bounds[0] + bounds[2]) / 2),
+    zoom_start=r["minzoom"]
+)
+
+aod_layer = TileLayer(
+    tiles=r["tiles"][0],
+    opacity=1,
+    attr="Yo!!"
+)
+aod_layer.add_to(m)
+m
+```
+![](https://user-images.githubusercontent.com/10407788/181458278-9ae197ae-5a30-469d-834f-36c6d8a57395.jpg)
+
 
 ## 3D (Experimental)
 

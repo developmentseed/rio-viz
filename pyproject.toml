@@ -24,6 +24,7 @@ dependencies = [
     "titiler.core>=0.5,<0.8",
     "starlette-cramjam>=0.3,<0.4",
     "uvicorn",
+    "server-thread>=0.2.0",
 ]
 
 [project.optional-dependencies]

@@ -9,7 +9,6 @@ from rio_tiler.io import COGReader
 from starlette.testclient import TestClient
 
 from rio_viz.app import viz
-from rio_viz.compat import AsyncReader
 from rio_viz.io.mosaic import MosaicReader
 from rio_viz.io.reader import MultiFilesAssetsReader, MultiFilesBandsReader
 
@@ -23,7 +22,7 @@ cog_mosaic_path = os.path.join(
 def test_viz():
     """Should work as expected (create TileServer object)."""
     src_path = cog_path
-    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": COGReader})
+    dataset_reader = COGReader
 
     app = viz(src_path, reader=dataset_reader)
 
@@ -184,21 +183,17 @@ def test_viz():
 def test_viz_custom():
     """Should work as expected (create TileServer object)."""
     src_path = cog_path
-    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": COGReader})
-
-    app = viz(src_path, reader=dataset_reader, host="0.0.0.0", port=5050)
+    app = viz(src_path, reader=COGReader, host="0.0.0.0", port=5050)
     assert app.port == 5050
     assert app.endpoint == "http://0.0.0.0:5050"
 
 
 def test_viz_multibands():
     """Should work as expected (create TileServer object)."""
-    dataset_reader = type(
-        "AsyncReader", (AsyncReader,), {"reader": MultiFilesBandsReader}
-    )
+    dataset_reader = MultiFilesBandsReader
 
     # Use default bands from the reader
-    app = viz(cogb1b2b3_path, reader=dataset_reader, reader_type="bands")
+    app = viz(cogb1b2b3_path, reader=dataset_reader)
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
     client = TestClient(app.app)
@@ -241,7 +236,7 @@ def test_viz_multibands():
     assert len(response.json()["values"]) == 2
 
     # Set default bands (other bands might still be available within the reader)
-    app = viz(cogb1b2b3_path, reader=dataset_reader, reader_type="bands", layers=["b1"])
+    app = viz(cogb1b2b3_path, reader=dataset_reader, layers=["b1"])
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
     client = TestClient(app.app)
@@ -284,12 +279,9 @@ def test_viz_multibands():
 
 def test_viz_multiassets():
     """Should work as expected (create TileServer object)."""
-    dataset_reader = type(
-        "AsyncReader", (AsyncReader,), {"reader": MultiFilesAssetsReader}
-    )
-
+    dataset_reader = MultiFilesAssetsReader
     # Use default bands from the reader
-    app = viz(cogb1b2b3_path, reader=dataset_reader, reader_type="assets")
+    app = viz(cogb1b2b3_path, reader=dataset_reader)
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
     client = TestClient(app.app)
@@ -327,9 +319,7 @@ def test_viz_multiassets():
     assert len(response.json()["values"]) == 2
 
     # Set default bands (other bands might still be available within the reader)
-    app = viz(
-        cogb1b2b3_path, reader=dataset_reader, reader_type="assets", layers=["asset1"]
-    )
+    app = viz(cogb1b2b3_path, reader=dataset_reader, layers=["asset1"])
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
     client = TestClient(app.app)
@@ -368,9 +358,9 @@ def test_viz_multiassets():
 def test_viz_mosaic():
     """Should work as expected (create TileServer object)."""
     src_path = cog_path
-    dataset_reader = type("AsyncReader", (AsyncReader,), {"reader": MosaicReader})
+    dataset_reader = MosaicReader
 
-    app = viz(src_path, reader=dataset_reader, reader_type="cog")
+    app = viz(src_path, reader=dataset_reader)
 
     assert app.port == 8080
     assert app.endpoint == "http://127.0.0.1:8080"
