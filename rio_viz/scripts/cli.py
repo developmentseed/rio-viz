@@ -11,16 +11,9 @@ import numpy
 from rasterio.rio import options
 from rio_cogeo.cogeo import cog_translate, cog_validate
 from rio_cogeo.profiles import cog_profiles
-from rio_tiler.io import (
-    AsyncBaseReader,
-    BaseReader,
-    COGReader,
-    MultiBandReader,
-    MultiBaseReader,
-)
+from rio_tiler.io import BaseReader, COGReader, MultiBandReader, MultiBaseReader
 
 from rio_viz import app
-from rio_viz.compat import AsyncReader
 
 
 @contextmanager
@@ -81,7 +74,7 @@ class NodataParamType(click.ParamType):
 @click.option(
     "--reader",
     type=str,
-    help="rio-tiler Reader (BaseReader or AsyncBaseReader). Default is `rio_tiler.io.COGReader`",
+    help="rio-tiler Reader (BaseReader). Default is `rio_tiler.io.COGReader`",
 )
 @click.option(
     "--layers",
@@ -120,19 +113,10 @@ def viz(
     if reader:
         module, classname = reader.rsplit(".", 1)
         reader = getattr(importlib.import_module(module), classname)  # noqa
-        if not issubclass(
-            reader, (BaseReader, AsyncBaseReader, MultiBandReader, MultiBaseReader)
-        ):
+        if not issubclass(reader, (BaseReader, MultiBandReader, MultiBaseReader)):
             warnings.warn(f"Invalid reader type: {type(reader)}")
 
     dataset_reader = reader or COGReader
-
-    if issubclass(dataset_reader, (MultiBandReader)):
-        reader_type = "bands"
-    elif issubclass(dataset_reader, (MultiBaseReader)):
-        reader_type = "assets"
-    else:
-        reader_type = "cog"
 
     # Check if cog
     with ExitStack() as ctx:
@@ -152,12 +136,6 @@ def viz(
             cog_translate(src_path, tmp_path.name, output_profile, config=config)
             src_path = tmp_path.name
 
-        # Dynamically create an Async Dataset Reader if not a subclass of AsyncBaseReader
-        if not issubclass(dataset_reader, AsyncBaseReader):
-            dataset_reader = type(
-                "AsyncReader", (AsyncReader,), {"reader": dataset_reader}
-            )
-
         application = app.viz(
             src_path=src_path,
             reader=dataset_reader,
@@ -168,7 +146,6 @@ def viz(
             maxzoom=maxzoom,
             nodata=nodata,
             layers=layers,
-            reader_type=reader_type,
         )
         if not server_only:
             click.echo(f"Viewer started at {application.template_url}", err=True)
