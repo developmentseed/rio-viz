@@ -1,4 +1,46 @@
 
+## 0.10.0 (TBD)
+
+* remove `AsyncBaseReader` support
+* add Jupyter Notebook compatible `Client`
+
+```python
+import time
+
+import httpx
+from folium import Map, TileLayer
+
+from rio_viz.app import Client
+
+# Create rio-viz Client (using server-thread to launch backgroud task)
+client = Client("https://data.geo.admin.ch/ch.swisstopo.swissalti3d/swissalti3d_2019_2573-1085/swissalti3d_2019_2573-1085_0.5_2056_5728.tif")
+
+# Gives some time for the server to setup
+time.sleep(1)
+
+r = httpx.get(
+    f"{client.endpoint}/tilejson.json",
+    params = {
+        "rescale": "1600,2000",  # from the info endpoint
+        "colormap_name": "terrain",
+    }
+).json()
+
+bounds = r["bounds"]
+m = Map(
+    location=((bounds[1] + bounds[3]) / 2,(bounds[0] + bounds[2]) / 2),
+    zoom_start=r["minzoom"]
+)
+
+aod_layer = TileLayer(
+    tiles=r["tiles"][0],
+    opacity=1,
+    attr="Yo!!"
+)
+aod_layer.add_to(m)
+m
+```
+
 ## 0.9.6 (2022-06-14)
 
 * update `titiler` and `starlette-cramjam` requirements
