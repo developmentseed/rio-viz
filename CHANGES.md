@@ -41,6 +41,8 @@ aod_layer.add_to(m)
 m
 ```
 
+* update `rio-tiler-mvt` requirement (**>=0.1,<0.2**)
+
 ## 0.9.6 (2022-06-14)
 
 * update `titiler` and `starlette-cramjam` requirements
