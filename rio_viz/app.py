@@ -16,7 +16,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
-from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
 from starlette_cramjam.middleware import CompressionMiddleware
@@ -36,9 +35,10 @@ from titiler.core.dependencies import (
     HistogramParams,
     ImageParams,
     ImageRenderingParams,
-    PostProcessParams,
+    RescalingParams,
     StatisticsParams,
 )
+from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.models.mapbox import TileJSON
 from titiler.core.resources.responses import JSONResponse, XMLResponse
 
@@ -50,7 +50,6 @@ except ModuleNotFoundError:
     has_mvt = False
     pixels_encoder = None
 
-src_dir = str(pathlib.Path(__file__).parent.joinpath("src"))
 template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
 templates = Jinja2Templates(directory=template_dir)
 
@@ -145,7 +144,7 @@ class viz:
         self.register_middleware()
         self.register_routes()
         self.app.include_router(self.router)
-        self.app.mount("/static", StaticFiles(directory=src_dir), name="static")
+        add_exception_handlers(self.app, DEFAULT_STATUS_CODES)
 
     def register_middleware(self):
         """Register Middleware to the FastAPI app."""
@@ -274,14 +273,18 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                results = src_dst.point(
+                pts = src_dst.point(
                     lon,
                     lat,
                     **layer_params,
                     **dataset_params,
                 )
 
-            return {"coordinates": [lon, lat], "values": results}
+            return {
+                "coordinates": [lon, lat],
+                "values": pts.data.tolist(),
+                "band_names": pts.band_names,
+            }
 
         preview_params = dict(
             responses={
@@ -299,7 +302,12 @@ class viz:
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            postprocess_params: PostProcessParams = Depends(),
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
+            color_formula: Optional[str] = Query(
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
             colormap: ColorMapParams = Depends(),
         ):
             """Handle /preview requests."""
@@ -310,17 +318,21 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                data = src_dst.preview(
+                image = src_dst.preview(
                     **layer_params,
                     **dataset_params,
                     **img_params,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
-            if not format:
-                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
+            if rescale:
+                image.rescale(rescale)
 
-            image = data.post_process(**postprocess_params)
+            if color_formula:
+                image.apply_color_formula(color_formula)
+
+            if not format:
+                format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
 
             content = image.render(
                 img_format=format.driver,
@@ -364,7 +376,12 @@ class viz:
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            postprocess_params: PostProcessParams = Depends(),
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
+            color_formula: Optional[str] = Query(
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
             colormap: ColorMapParams = Depends(),
         ):
             """Create image from part of a dataset."""
@@ -375,7 +392,7 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                data = src_dst.part(
+                image = src_dst.part(
                     [minx, miny, maxx, maxy],
                     **layer_params,
                     **dataset_params,
@@ -383,7 +400,11 @@ class viz:
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
-            image = data.post_process(**postprocess_params)
+            if rescale:
+                image.rescale(rescale)
+
+            if color_formula:
+                image.apply_color_formula(color_formula)
 
             content = image.render(
                 img_format=format.driver,
@@ -419,7 +440,12 @@ class viz:
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            postprocess_params: PostProcessParams = Depends(),
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
+            color_formula: Optional[str] = Query(
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
             colormap: ColorMapParams = Depends(),
         ):
             """Handle /feature requests."""
@@ -430,15 +456,19 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                data = src_dst.feature(
+                image = src_dst.feature(
                     geom.dict(exclude_none=True), **layer_params, **dataset_params
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
-            if not format:
-                format = RasterFormat.jpeg if data.mask.all() else RasterFormat.png
+            if rescale:
+                image.rescale(rescale)
 
-            image = data.post_process(**postprocess_params)
+            if color_formula:
+                image.apply_color_formula(color_formula)
+
+            if not format:
+                format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
 
             content = image.render(
                 img_format=format.driver,
@@ -470,7 +500,12 @@ class viz:
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            postprocess_params: PostProcessParams = Depends(),
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
+            color_formula: Optional[str] = Query(
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
             colormap: ColorMapParams = Depends(),
             feature_type: Optional[VectorTileType] = Query(
                 None,
@@ -493,7 +528,7 @@ class viz:
                 # Adapt options for each reader type
                 self._update_params(src_dst, layer_params)
 
-                tile_data = src_dst.tile(
+                image = src_dst.tile(
                     x,
                     y,
                     z,
@@ -519,20 +554,22 @@ class viz:
                     )
 
                 content = pixels_encoder(
-                    tile_data.data,
-                    tile_data.mask,
-                    tile_data.band_names,
+                    image.data,
+                    image.mask,
+                    image.band_names,
                     feature_type=feature_type.value,
                 )
 
             # Raster Tile
             else:
-                if not format:
-                    format = (
-                        RasterFormat.jpeg if tile_data.mask.all() else RasterFormat.png
-                    )
+                if rescale:
+                    image.rescale(rescale)
 
-                image = tile_data.post_process(**postprocess_params)
+                if color_formula:
+                    image.apply_color_formula(color_formula)
+
+                if not format:
+                    format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
 
                 content = image.render(
                     img_format=format.driver,
@@ -556,7 +593,14 @@ class viz:
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
             render_params: ImageRenderingParams = Depends(),  # noqa
-            postprocess_params: PostProcessParams = Depends(),  # noqa
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(
+                RescalingParams
+            ),  # noqa
+            color_formula: Optional[str] = Query(  # noqa
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
             colormap: ColorMapParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
@@ -597,8 +641,21 @@ class viz:
             ),
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params: DatasetParams = Depends(),  # noqa
+            buffer: Optional[float] = Query(  # noqa
+                None,
+                gt=0,
+                title="Tile buffer.",
+                description="Buffer on each side of the given tile. It must be a multiple of `0.5`. Output **tilesize** will be expanded to `tilesize + 2 * tile_buffer` (e.g 0.5 = 257x257, 1.0 = 258x258).",
+            ),
             render_params: ImageRenderingParams = Depends(),  # noqa
-            postprocess_params: PostProcessParams = Depends(),  # noqa
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(
+                RescalingParams
+            ),  # noqa
+            color_formula: Optional[str] = Query(  # noqa
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
             colormap: ColorMapParams = Depends(),  # noqa
             feature_type: str = Query(  # noqa
                 None, title="Feature type", regex="^(point)|(polygon)$"
@@ -652,6 +709,39 @@ class viz:
                     "media_type": tile_format.mediatype,
                 },
                 media_type="application/xml",
+            )
+
+        @self.router.get("/map", response_class=HTMLResponse)
+        def map_viewer(
+            request: Request,
+            tile_format: Optional[TileFormat] = None,  # noqa
+            layer_params=Depends(self.layer_dependency),  # noqa
+            dataset_params: DatasetParams = Depends(),  # noqa
+            render_params: ImageRenderingParams = Depends(),  # noqa
+            rescale: Optional[List[Tuple[float, ...]]] = Depends(
+                RescalingParams
+            ),  # noqa
+            color_formula: Optional[str] = Query(  # noqa
+                None,
+                title="Color Formula",
+                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+            ),
+            colormap: ColorMapParams = Depends(),  # noqa
+            tilesize: Optional[int] = Query(None, description="Tile Size."),  # noqa
+        ):
+            """Return a simple map viewer."""
+            tilejson_url = request.url_for("tilejson")
+
+            if request.query_params:
+                tilejson_url += f"?{request.query_params}"
+
+            return templates.TemplateResponse(
+                name="map.html",
+                context={
+                    "request": request,
+                    "tilejson_endpoint": tilejson_url,
+                },
+                media_type="text/html",
             )
 
         @self.router.get(

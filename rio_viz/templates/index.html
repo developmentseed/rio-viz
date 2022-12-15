@@ -4,11 +4,12 @@
         <meta charset='utf-8' />
         <title>Rio Viz</title>
         <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
-        <link href="{{ url_for('static', path='/css/mapbox-gl.css') }}" rel='stylesheet' />
-        <script src="{{ url_for('static', path='/js/mapbox-gl.js') }}"></script>
-        <link href="{{ url_for('static', path='/css/assembly.min.css') }}" rel='stylesheet'>
-        <script src="{{ url_for('static', path='/js/assembly.js') }}"></script>
-        <script src="{{ url_for('static', path='/js/d3.v4.js') }}"></script>
+        <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.6.1/mapbox-gl.js'></script>
+        <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v1.6.1/mapbox-gl.css' rel='stylesheet' />
+
+        <link href='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.min.css' rel='stylesheet'>
+        <script src='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js'></script>
+        <script src="https://d3js.org/d3.v4.js"></script>
         <style>
             body { margin:0; padding:0; width:100%; height:100%;}
             #map { position:absolute; top:0; bottom:0; width:100%; }
@@ -389,7 +390,7 @@ const set1bViz = () => {
   const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
   switch (vizType) {
     case 'raster':
-      params.bidx = document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")
+      params.bidx = document.getElementById('layer-selector').selectedOptions[0].getAttribute("bidx")
 
       if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) {
         params.rescale = `${document.getElementById('data-min').value},${document.getElementById('data-max').value}`
@@ -431,9 +432,9 @@ const set1bViz = () => {
 }
 
 const set3bViz = () => {
-  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
-  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
-  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
+  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("bidx")
+  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("bidx")
+  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("bidx")
 
   params = {}
   if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) {
@@ -486,7 +487,7 @@ const addLayer = (layerType) => {
   if (scope.dataset_statistics) addHisto1Band()
 
   const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-  const propName = active_layer.getAttribute("band")
+  const propName = active_layer.getAttribute("bname")
   const exag = parseFloat(document.getElementById('ex-value').value)
 
   switch (layerType) {
@@ -557,9 +558,9 @@ const addLayer = (layerType) => {
 }
 
 const addHisto3Bands = () => {
-  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("band")
-  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("band")
-  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("band")
+  const r = document.getElementById('r-selector').selectedOptions[0].getAttribute("bname")
+  const g = document.getElementById('g-selector').selectedOptions[0].getAttribute("bname")
+  const b = document.getElementById('b-selector').selectedOptions[0].getAttribute("bname")
 
   const rStats = scope.dataset_statistics[r]
   const gStats = scope.dataset_statistics[g]
@@ -672,7 +673,7 @@ const addHisto3Bands = () => {
 }
 
 const addHisto1Band = () => {
-  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("band")]
+  const stats = scope.dataset_statistics[document.getElementById('layer-selector').selectedOptions[0].getAttribute("bname")]
 
   let counts = stats.histogram[0]
   const sum = counts.reduce(function(a, b){
@@ -962,7 +963,7 @@ map.on('load', () => {
           let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
           for (var i = 0; i < scope.band_descriptions.length; i++) {
             let value = data.values[i]
-            let key = scope.band_descriptions[i][1] || `band ${scope.band_descriptions[i][0]}`
+            let key = scope.band_descriptions[i][1] || `${scope.band_descriptions[i][0]}`
             html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
           }
           html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
@@ -1003,10 +1004,9 @@ map.on('load', () => {
       const layerList = document.getElementById('layer-selector')
       for (var i = 0; i < nbands; i++) {
         let l = document.createElement('option')
-        l.setAttribute('band', band_descr[i][0])
-        let name = band_descr[i][1] || band_descr[i][0]
-        l.setAttribute('name', name)
-        l.text = name
+        l.setAttribute('bidx', i + 1)
+        l.setAttribute('bname', band_descr[i][0])
+        l.text = band_descr[i][1] || band_descr[i][0]
         layerList.appendChild(l)
       }
 
@@ -1014,10 +1014,9 @@ map.on('load', () => {
       const rList = document.getElementById('r-selector')
       for (var i = 0; i < nbands; i++) {
         let l = document.createElement('option')
-        l.setAttribute('band', band_descr[i][0])
-        let name = band_descr[i][1] || band_descr[i][0]
-        l.setAttribute('name', name)
-        l.text = name
+        l.setAttribute('bidx', i + 1)
+        l.setAttribute('bname', band_descr[i][0])
+        l.text = band_descr[i][1] || band_descr[i][0]
         if (i === 0) l.selected="selected"
         rList.appendChild(l)
       }
@@ -1025,10 +1024,9 @@ map.on('load', () => {
       const gList = document.getElementById('g-selector')
       for (var i = 0; i < nbands; i++) {
         let l = document.createElement('option')
-        l.setAttribute('band', band_descr[i][0])
-        let name = band_descr[i][1] || band_descr[i][0]
-        l.setAttribute('name', name)
-        l.text = name
+        l.setAttribute('bidx', i + 1)
+        l.setAttribute('bname', band_descr[i][0])
+        l.text = band_descr[i][1] || band_descr[i][0]
         if (i === 1) l.selected="selected"
         gList.appendChild(l)
       }
@@ -1036,10 +1034,9 @@ map.on('load', () => {
       const bList = document.getElementById('b-selector')
       for (var i = 0; i < nbands; i++) {
         let l = document.createElement('option')
-        l.setAttribute('band', band_descr[i][0])
-        let name = band_descr[i][1] || band_descr[i][0]
-        l.setAttribute('name', name)
-        l.text = name
+        l.setAttribute('bidx', i + 1)
+        l.setAttribute('bname', band_descr[i][0])
+        l.text = band_descr[i][1] || band_descr[i][0]
         if (band_descr.length > 2 && i === 2) {
           l.selected="selected"
         } else {

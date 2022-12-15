@@ -22,6 +22,17 @@ class MultiFilesBandsReader(MultiBandReader):
 
     files: List[str] = attr.ib(init=False)
 
+    minzoom: int = attr.ib()
+    maxzoom: int = attr.ib()
+
+    @minzoom.default
+    def _minzoom(self):
+        return self.tms.minzoom
+
+    @maxzoom.default
+    def _maxzoom(self):
+        return self.tms.maxzoom
+
     def __attrs_post_init__(self):
         """Fetch Reference band to get the bounds."""
         self.files = list(braceexpand(self.input))
@@ -53,6 +64,17 @@ class MultiFilesAssetsReader(MultiBaseReader):
     reader: Type[BaseReader] = attr.ib(default=COGReader)
 
     files: List[str] = attr.ib(init=False)
+
+    minzoom: int = attr.ib()
+    maxzoom: int = attr.ib()
+
+    @minzoom.default
+    def _minzoom(self):
+        return self.tms.minzoom
+
+    @maxzoom.default
+    def _maxzoom(self):
+        return self.tms.maxzoom
 
     def __attrs_post_init__(self):
         """Fetch Reference band to get the bounds."""
