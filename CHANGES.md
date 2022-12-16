@@ -43,6 +43,12 @@ m
 
 * update `rio-tiler-mvt` requirement (**>=0.1,<0.2**)
 
+* add support for python 3.10 and 3.11
+* remove python 3.7 support
+* update titiler requirement to `0.10`
+* revert using static files for javascript libraries
+* add simple `/map` viewer
+
 ## 0.9.6 (2022-06-14)
 
 * update `titiler` and `starlette-cramjam` requirements

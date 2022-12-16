@@ -8,6 +8,7 @@ from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.errors import InvalidBandName
 from rio_tiler.io import BaseReader, COGReader, MultiBandReader, MultiBaseReader
+from rio_tiler.types import AssetInfo
 
 
 @attr.s
@@ -87,10 +88,10 @@ class MultiFilesAssetsReader(MultiBaseReader):
             self.minzoom = cog.minzoom
             self.maxzoom = cog.maxzoom
 
-    def _get_asset_url(self, asset: str) -> str:
+    def _get_asset_info(self, asset: str) -> AssetInfo:
         """Validate band's name and return band's url."""
         if asset not in self.assets:
             raise InvalidBandName(f"{asset} is not valid")
 
         index = self.assets.index(asset)
-        return self.files[index]
+        return AssetInfo(url=self.files[index])

@@ -1,16 +1,14 @@
 """rio-viz mosaic reader."""
 
-from typing import Any, Dict, List, Type
+from typing import Any, Dict, Type
 
 import attr
 from braceexpand import braceexpand
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS, WGS84_CRS
-from rio_tiler.errors import PointOutsideBounds
 from rio_tiler.io import BaseReader, COGReader
-from rio_tiler.models import BandStatistics, ImageData, Info
-from rio_tiler.mosaic import mosaic_reader
-from rio_tiler.tasks import multi_values
+from rio_tiler.models import BandStatistics, ImageData, Info, PointData
+from rio_tiler.mosaic import mosaic_point_reader, mosaic_reader
 
 
 @attr.s
@@ -94,27 +92,18 @@ class MosaicReader(BaseReader):
         lat: float,
         reverse: bool = False,
         **kwargs: Any,
-    ) -> List:
+    ) -> PointData:
         """Get Point value."""
         mosaic_assets = (
             list(reversed(list(self.datasets))) if reverse else list(self.datasets)
         )
 
-        def _reader(asset: str, lon: float, lat: float, **kwargs) -> List:
+        def _reader(asset: str, lon: float, lat: float, **kwargs) -> PointData:
             return self.datasets[asset].point(lon, lat, **kwargs)
 
-        if "allowed_exceptions" not in kwargs:
-            kwargs.update({"allowed_exceptions": (PointOutsideBounds,)})
-
-        return [
-            # FOR NOW WE ONLY RETURN VALUE FROM THE FIRST FILE
-            list(r)[0]
-            for r in zip(
-                *multi_values(
-                    mosaic_assets, _reader, lon, lat, threads=0, **kwargs
-                ).values()
-            )
-        ]
+        return mosaic_point_reader(
+            mosaic_assets, _reader, lon, lat, threads=0, **kwargs
+        )[0]
 
     def info(self) -> Info:
         """info."""

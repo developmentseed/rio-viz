@@ -4,7 +4,6 @@ import json
 import os
 
 import pytest
-from rio_tiler.errors import TileOutsideBounds
 from rio_tiler.io import COGReader
 from starlette.testclient import TestClient
 
@@ -62,11 +61,11 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    with pytest.raises(TileOutsideBounds):
-        client.get("/tiles/18/8624/119094.png")
+    response = client.get("/tiles/18/8624/119094.png")
+    assert response.status_code == 404
 
-    with pytest.raises(TileOutsideBounds):
-        client.get("/tiles/18/8624/119094.pbf")
+    response = client.get("/tiles/18/8624/119094.pbf")
+    assert response.status_code == 404
 
     response = client.get("/tiles/7/64/43.pbf")
     assert response.status_code == 500
@@ -134,7 +133,11 @@ def test_viz():
     response = client.get("/point?coordinates=-2,48")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    assert response.json() == {"coordinates": [-2.0, 48.0], "values": [110]}
+    assert response.json() == {
+        "band_names": ["b1"],
+        "coordinates": [-2.0, 48.0],
+        "values": [110],
+    }
 
     feat = json.dumps(
         {
@@ -311,12 +314,13 @@ def test_viz_multiassets():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     assert len(response.json()["values"]) == 3
-    assert len(response.json()["values"][0]) == 1
+    assert response.json()["band_names"] == ["asset1_b1", "asset2_b1", "asset3_b1"]
 
     response = client.get("/point?coordinates=-2.0,48.0&assets=asset1&assets=asset2")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     assert len(response.json()["values"]) == 2
+    assert response.json()["band_names"] == ["asset1_b1", "asset2_b1"]
 
     # Set default bands (other bands might still be available within the reader)
     app = viz(cogb1b2b3_path, reader=dataset_reader, layers=["asset1"])
@@ -357,7 +361,7 @@ def test_viz_multiassets():
 
 def test_viz_mosaic():
     """Should work as expected (create TileServer object)."""
-    src_path = cog_path
+    src_path = cog_mosaic_path
     dataset_reader = MosaicReader
 
     app = viz(src_path, reader=dataset_reader)
@@ -383,7 +387,7 @@ def test_viz_mosaic():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
-    response = client.get("/tiles/7/64/43?rescale=1,10")
+    response = client.get("/tiles/8/75/91?rescale=1,10")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert response.headers["cache-control"] == "no-cache"
@@ -394,7 +398,16 @@ def test_viz_mosaic():
     with pytest.raises(NotImplementedError):
         client.get("/crop/-2.00,48.5,-1,49.5.png")
 
+    # Point is Outside COGs bounds
     response = client.get("/point?coordinates=-2,48")
+    assert response.status_code == 500
+    assert "Method returned an empty array" in response.text  # InvalidPointDataError
+
+    response = client.get("/point?coordinates=-72.63567185076337,46.10493842126715")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    assert response.json() == {"coordinates": [-2.0, 48.0], "values": [110]}
+    assert response.json() == {
+        "band_names": ["b1", "b2", "b3"],
+        "coordinates": [-72.63567185076337, 46.10493842126715],
+        "values": [12453, 11437, 11360],
+    }
