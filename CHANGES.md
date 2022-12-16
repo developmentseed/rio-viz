@@ -1,5 +1,5 @@
 
-## 0.10.0 (TBD)
+## 0.10.0 (2022-12-16)
 
 * remove `AsyncBaseReader` support
 * add Jupyter Notebook compatible `Client`
