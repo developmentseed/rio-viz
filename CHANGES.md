@@ -1,4 +1,8 @@
 
+## 0.10.1 (2023-03-01)
+
+* update titiler requirement
+
 ## 0.10.0 (2022-12-16)
 
 * remove `AsyncBaseReader` support
@@ -12,7 +16,7 @@ from folium import Map, TileLayer
 
 from rio_viz.app import Client
 
-# Create rio-viz Client (using server-thread to launch backgroud task)
+# Create rio-viz Client (using server-thread to launch background task)
 client = Client("https://data.geo.admin.ch/ch.swisstopo.swissalti3d/swissalti3d_2019_2573-1085/swissalti3d_2019_2573-1085_0.5_2056_5728.tif")
 
 # Gives some time for the server to setup

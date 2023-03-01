@@ -134,13 +134,6 @@ class viz:
             self.statistics_dependency = AssetsBidxParams
             self.layer_dependency = AssetsBidxExprParamsOptional
 
-        with self.reader(self.src_path) as src_dst:
-            self.bounds = (
-                self.bounds if self.bounds is not None else src_dst.geographic_bounds
-            )
-            self.minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
-            self.maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
-
         self.register_middleware()
         self.register_routes()
         self.app.include_router(self.router)
@@ -286,13 +279,13 @@ class viz:
                 "band_names": pts.band_names,
             }
 
-        preview_params = dict(
-            responses={
+        preview_params = {
+            "responses": {
                 200: {"content": img_media_types, "description": "Return a preview."}
             },
-            response_class=Response,
-            description="Return a preview.",
-        )
+            "response_class": Response,
+            "description": "Return a preview.",
+        }
 
         @self.router.get(r"/preview", **preview_params, tags=["API"])
         @self.router.get(r"/preview.{format}", **preview_params, tags=["API"])
@@ -343,16 +336,16 @@ class viz:
 
             return Response(content, media_type=format.mediatype)
 
-        part_params = dict(
-            responses={
+        part_params = {
+            "responses": {
                 200: {
                     "content": img_media_types,
                     "description": "Return a part of a dataset.",
                 }
             },
-            response_class=Response,
-            description="Return a part of a dataset.",
-        )
+            "response_class": Response,
+            "description": "Return a part of a dataset.",
+        }
 
         @self.router.get(
             r"/crop/{minx},{miny},{maxx},{maxy}.{format}",
@@ -415,16 +408,16 @@ class viz:
 
             return Response(content, media_type=format.mediatype)
 
-        feature_params = dict(
-            responses={
+        feature_params = {
+            "responses": {
                 200: {
                     "content": img_media_types,
                     "description": "Return part of a dataset defined by a geojson feature.",
                 }
             },
-            response_class=Response,
-            description="Return part of a dataset defined by a geojson feature.",
-        )
+            "response_class": Response,
+            "description": "Return part of a dataset defined by a geojson feature.",
+        }
 
         @self.router.post(r"/crop", **feature_params, tags=["API"])
         @self.router.post(r"/crop.{format}", **feature_params, tags=["API"])
@@ -479,16 +472,16 @@ class viz:
 
             return Response(content, media_type=format.mediatype)
 
-        tile_params = dict(
-            responses={
+        tile_params = {
+            "responses": {
                 200: {
                     "content": {**img_media_types, **mvt_media_types},
                     "description": "Return a tile.",
                 }
             },
-            response_class=Response,
-            description="Read COG and return a tile",
-        )
+            "response_class": Response,
+            "description": "Read COG and return a tile",
+        }
 
         @self.router.get(r"/tiles/{z}/{x}/{y}", **tile_params, tags=["API"])
         @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **tile_params, tags=["API"])
@@ -622,14 +615,23 @@ class viz:
             if qs:
                 tile_url += f"?{urllib.parse.urlencode(qs)}"
 
-            return dict(
-                bounds=self.bounds,
-                minzoom=self.minzoom,
-                maxzoom=self.maxzoom,
-                name="rio-viz",
-                tilejson="2.1.0",
-                tiles=[tile_url],
-            )
+            with self.reader(self.src_path) as src_dst:  # type: ignore
+                bounds = (
+                    self.bounds
+                    if self.bounds is not None
+                    else src_dst.geographic_bounds
+                )
+                minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
+                maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
+
+            return {
+                "bounds": bounds,
+                "minzoom": minzoom,
+                "maxzoom": maxzoom,
+                "name": "rio-viz",
+                "tilejson": "2.1.0",
+                "tiles": [tile_url],
+            }
 
         @self.router.get(
             "/WMTSCapabilities.xml", response_class=XMLResponse, tags=["API"]
@@ -684,8 +686,17 @@ class viz:
             if qs:
                 tiles_endpoint += f"?{urllib.parse.urlencode(qs)}"
 
+            with self.reader(self.src_path) as src_dst:  # type: ignore
+                bounds = (
+                    self.bounds
+                    if self.bounds is not None
+                    else src_dst.geographic_bounds
+                )
+                minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
+                maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
+
             tileMatrix = []
-            for zoom in range(self.minzoom, self.maxzoom + 1):  # type: ignore
+            for zoom in range(minzoom, maxzoom + 1):  # type: ignore
                 tm = f"""<TileMatrix>
                     <ows:Identifier>{zoom}</ows:Identifier>
                     <ScaleDenominator>{559082264.02872 / 2 ** zoom / 1}</ScaleDenominator>
@@ -702,7 +713,7 @@ class viz:
                 {
                     "request": request,
                     "tiles_endpoint": tiles_endpoint,
-                    "bounds": self.bounds,
+                    "bounds": bounds,
                     "tileMatrix": tileMatrix,
                     "title": "Cloud Optimized GeoTIFF",
                     "layer_name": "cogeo",
