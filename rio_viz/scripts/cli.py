@@ -41,8 +41,10 @@ class NodataParamType(click.ParamType):
                 return None
             else:
                 return float(value)
-        except (TypeError, ValueError):
-            raise click.ClickException("{} is not a valid nodata value.".format(value))
+        except (TypeError, ValueError) as e:
+            raise click.ClickException(
+                "{} is not a valid nodata value.".format(value)
+            ) from e
 
 
 @click.command()
@@ -131,8 +133,8 @@ def viz(
             tmp_path = ctx.enter_context(TemporaryRasterFile())
 
             output_profile = cog_profiles.get("deflate")
-            output_profile.update(dict(blockxsize="256", blockysize="256"))
-            config = dict(GDAL_TIFF_INTERNAL_MASK=True, GDAL_TIFF_OVR_BLOCKSIZE="128")
+            output_profile.update({"blockxsize": "256", "blockysize": "256"})
+            config = {"GDAL_TIFF_INTERNAL_MASK": True, "GDAL_TIFF_OVR_BLOCKSIZE": "128"}
             cog_translate(src_path, tmp_path.name, output_profile, config=config)
             src_path = tmp_path.name
 

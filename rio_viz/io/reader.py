@@ -7,7 +7,7 @@ from braceexpand import braceexpand
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.errors import InvalidBandName
-from rio_tiler.io import BaseReader, COGReader, MultiBandReader, MultiBaseReader
+from rio_tiler.io import BaseReader, MultiBandReader, MultiBaseReader, Reader
 from rio_tiler.types import AssetInfo
 
 
@@ -19,7 +19,7 @@ class MultiFilesBandsReader(MultiBandReader):
     tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
 
     reader_options: Dict = attr.ib(factory=dict)
-    reader: Type[BaseReader] = attr.ib(default=COGReader)
+    reader: Type[BaseReader] = attr.ib(default=Reader)
 
     files: List[str] = attr.ib(init=False)
 
@@ -62,7 +62,7 @@ class MultiFilesAssetsReader(MultiBaseReader):
     tms: TileMatrixSet = attr.ib(default=WEB_MERCATOR_TMS)
 
     reader_options: Dict = attr.ib(factory=dict)
-    reader: Type[BaseReader] = attr.ib(default=COGReader)
+    reader: Type[BaseReader] = attr.ib(default=Reader)
 
     files: List[str] = attr.ib(init=False)
 
