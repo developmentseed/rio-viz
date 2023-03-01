@@ -10,12 +10,12 @@
       <img src="https://github.com/developmentseed/rio-viz/workflows/CI/badge.svg" alt="Test">
   </a>
   <a href="https://codecov.io/gh/developmentseed/rio-viz" target="_blank">
-      <img src="https://codecov.io/gh/developmentseed/rio-viz/branch/master/graph/badge.svg" alt="Coverage">
+      <img src="https://codecov.io/gh/developmentseed/rio-viz/branch/main/graph/badge.svg" alt="Coverage">
   </a>
   <a href="https://pypi.org/project/rio-viz" target="_blank">
       <img src="https://img.shields.io/pypi/v/rio-viz?color=%2334D058&label=pypi%20package" alt="Package version">
   </a>
-  <a href="https://github.com/developmentseed/rio-viz/blob/master/LICENSE" target="_blank">
+  <a href="https://github.com/developmentseed/rio-viz/blob/main/LICENSE" target="_blank">
       <img src="https://img.shields.io/github/license/developmentseed/rio-viz.svg" alt="Downloads">
   </a>
 </p>
@@ -190,7 +190,7 @@ Notes:
 
 ## Contribution & Development
 
-See [CONTRIBUTING.md](https://github.com/developmentseed/rio-viz/blob/master/CONTRIBUTING.md)
+See [CONTRIBUTING.md](https://github.com/developmentseed/rio-viz/blob/main/CONTRIBUTING.md)
 
 ## Authors
 
@@ -198,8 +198,8 @@ Created by [Development Seed](<http://developmentseed.org>)
 
 ## Changes
 
-See [CHANGES.md](https://github.com/developmentseed/rio-viz/blob/master/CHANGES.md).
+See [CHANGES.md](https://github.com/developmentseed/rio-viz/blob/main/CHANGES.md).
 
 ## License
 
-See [LICENSE.txt](https://github.com/developmentseed/rio-viz/blob/master/LICENSE)
+See [LICENSE.txt](https://github.com/developmentseed/rio-viz/blob/main/LICENSE)
