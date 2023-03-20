@@ -95,11 +95,29 @@ const bboxPolygon = (bounds) => {
 }
 
 const addAOI = (bounds) => {
-  const geojson = {
-      "type": "FeatureCollection",
-      "features": [bboxPolygon(bounds)]
+  if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
+  if (map.getSource('aoi')) map.removeSource('aoi')
+  if (bounds[0] > bounds[2]) {
+    map.addSource('aoi', {
+      'type': 'geojson',
+      'data': {
+        "type": "FeatureCollection",
+        "features": [
+          bboxPolygon([-180, bounds[1], bounds[2], bounds[3]]),
+          bboxPolygon([bounds[0], bounds[1], 180, bounds[3]]),
+        ]
+      }
+    })
+  } else {
+    map.addSource('aoi', {
+      'type': 'geojson',
+      'data': {
+        "type": "FeatureCollection",
+        "features": [bboxPolygon(bounds)]
+      }
+    })
   }
-  map.addSource('aoi', { 'type': 'geojson', 'data': geojson })
+
   map.addLayer({
     id: 'aoi-polygon',
     type: 'line',
@@ -125,17 +143,53 @@ map.on('load', () => {
     })
     .then(data => {
       console.log(data)
+      let crossing_dateline = false
       let bounds = [...data.bounds]
       // Bounds crossing dateline
       if (bounds[0] > bounds[2]) {
+        crossing_dateline = true
         bounds[0] = bounds[0] - 360
       }
       map.fitBounds(
         [[bounds[0], bounds[1]], [bounds[2], bounds[3]]]
       )
       addAOI(bounds)
-      map.addSource('raster', {type: 'raster', ...data})
-      map.addLayer({ id: 'raster', type: 'raster', source: 'raster' })
+
+      if (crossing_dateline) {
+        // 2 sources and 2 layers
+        // left
+        map.addSource('raster-l', {
+          type: 'raster',
+          bounds: [-180, bounds[1], bounds[2], bounds[3]],
+          minzoom: data.minzoom,
+          maxzoom: data.maxzoom,
+          tiles: data.tiles,
+          tileSize: 256 // This might be false but it's not in TileJSON
+        })
+        map.addLayer({id: 'raster-l', type: 'raster', source: 'raster-l'})
+
+        //right
+        map.addSource('raster-r', {
+          type: 'raster',
+          bounds: [bounds[0], bounds[1], 180, bounds[3]],
+          minzoom: data.minzoom,
+          maxzoom: data.maxzoom,
+          tiles: data.tiles,
+          tileSize: 256 // This might be false but it's not in TileJSON
+        })
+        map.addLayer({id: 'raster-r', type: 'raster', source: 'raster-r'})
+
+      } else {
+        map.addSource('raster', {
+          type: 'raster',
+          bounds: bounds,
+          minzoom: data.minzoom,
+          maxzoom: data.maxzoom,
+          tiles: data.tiles,
+          tileSize: 256 // This might be false but it's not in TileJSON
+        })
+        map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
+      }
     })
     .catch(err => {
       console.warn(err)

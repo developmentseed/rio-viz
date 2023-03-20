@@ -324,12 +324,14 @@ class viz:
             if color_formula:
                 image.apply_color_formula(color_formula)
 
+            if cmap := colormap or dst_colormap:
+                image = image.apply_colormap(cmap)
+
             if not format:
                 format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
 
             content = image.render(
                 img_format=format.driver,
-                colormap=colormap or dst_colormap,
                 **format.profile,
                 **render_params,
             )
@@ -399,9 +401,11 @@ class viz:
             if color_formula:
                 image.apply_color_formula(color_formula)
 
+            if cmap := colormap or dst_colormap:
+                image = image.apply_colormap(cmap)
+
             content = image.render(
                 img_format=format.driver,
-                colormap=colormap or dst_colormap,
                 **format.profile,
                 **render_params,
             )
@@ -460,12 +464,14 @@ class viz:
             if color_formula:
                 image.apply_color_formula(color_formula)
 
+            if cmap := colormap or dst_colormap:
+                image = image.apply_colormap(cmap)
+
             if not format:
                 format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
 
             content = image.render(
                 img_format=format.driver,
-                colormap=colormap or dst_colormap,
                 **format.profile,
                 **render_params,
             )
@@ -561,12 +567,14 @@ class viz:
                 if color_formula:
                     image.apply_color_formula(color_formula)
 
+                if cmap := colormap or dst_colormap:
+                    image = image.apply_colormap(cmap)
+
                 if not format:
                     format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
 
                 content = image.render(
                     img_format=format.driver,
-                    colormap=colormap or dst_colormap,
                     **format.profile,
                     **render_params,
                 )
@@ -605,7 +613,7 @@ class viz:
             if tile_format:
                 kwargs["format"] = tile_format.value
 
-            tile_url = request.url_for("tile", **kwargs)
+            tile_url = str(request.url_for("tile", **kwargs))
 
             qs = [
                 (key, value)
@@ -676,7 +684,7 @@ class viz:
                 "y": "{TileRow}",
                 "format": tile_format.value,
             }
-            tiles_endpoint = request.url_for("tile", **kwargs)
+            tiles_endpoint = str(request.url_for("tile", **kwargs))
 
             qs = [
                 (key, value)
@@ -741,7 +749,7 @@ class viz:
             tilesize: Optional[int] = Query(None, description="Tile Size."),  # noqa
         ):
             """Return a simple map viewer."""
-            tilejson_url = request.url_for("tilejson")
+            tilejson_url = str(request.url_for("tilejson"))
 
             if request.query_params:
                 tilejson_url += f"?{request.query_params}"
@@ -780,10 +788,10 @@ class viz:
                 name=name,
                 context={
                     "request": request,
-                    "tilejson_endpoint": request.url_for("tilejson"),
-                    "stats_endpoint": request.url_for("statistics"),
-                    "info_endpoint": request.url_for("info"),
-                    "point_endpoint": request.url_for("point"),
+                    "tilejson_endpoint": str(request.url_for("tilejson")),
+                    "stats_endpoint": str(request.url_for("statistics")),
+                    "info_endpoint": str(request.url_for("info")),
+                    "point_endpoint": str(request.url_for("point")),
                     "allow_3d": has_mvt,
                 },
                 media_type="text/html",
