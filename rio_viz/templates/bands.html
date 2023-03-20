@@ -321,7 +321,9 @@
 var scope = {
   dataset_statistics: undefined,
   data_type: undefined,
-  band_descriptions: undefined
+  band_descriptions: undefined,
+  bounds: undefined,
+  crossing_dateline: false
 }
 
 mapboxgl.accessToken = ''
@@ -384,6 +386,184 @@ map.on('zoom', function (e) {
   document.getElementById('zoom').textContent = z
 })
 
+const add_raster = (tilejson) => {
+  if (map.getLayer('raster-l')) map.removeLayer('raster-l')
+  if (map.getSource('raster-l')) map.removeSource('raster-l')
+  if (map.getLayer('raster-r')) map.removeLayer('raster-r')
+  if (map.getSource('raster-r')) map.removeSource('raster-r')
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getSource('raster')) map.removeSource('raster')
+
+  let bounds = [...tilejson.bounds]
+  if (scope.crossing_dateline) {
+    // 2 sources and 2 layers
+    // left
+    map.addSource('raster-l', {
+      type: 'raster',
+      bounds: [-180, bounds[1], bounds[2], bounds[3]],
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster-l', type: 'raster', source: 'raster-l'})
+
+    //right
+    map.addSource('raster-r', {
+      type: 'raster',
+      bounds: [bounds[0], bounds[1], 180, bounds[3]],
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster-r', type: 'raster', source: 'raster-r'})
+
+  } else {
+    map.addSource('raster', {
+      type: 'raster',
+      bounds: tilejson.bounds,
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
+  }
+}
+
+const add_vector_source = (tilejson) => {
+  if (map.getLayer('vector-l')) map.removeLayer('vector-l')
+  if (map.getLayer('vector-r')) map.removeLayer('vector-r')
+  if (map.getSource('vector-l')) map.removeSource('vector-l')
+  if (map.getSource('vector-r')) map.removeSource('vector-r')
+  if (map.getLayer('vector')) map.removeLayer('vector')
+  if (map.getSource('vector')) map.removeSource('vector')
+
+  let bounds = [...tilejson.bounds]
+  if (scope.crossing_dateline) {
+    // 2 sources and 2 layers
+    // left
+    map.addSource('vector-l', {
+      type: 'vector',
+      bounds: [-180, bounds[1], bounds[2], bounds[3]],
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+    })
+
+    //right
+    map.addSource('vector-r', {
+      type: 'vector',
+      bounds: [bounds[0], bounds[1], 180, bounds[3]],
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+    })
+
+  } else {
+    map.addSource('vector', {
+      type: 'vector',
+      bounds: tilejson.bounds,
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+    })
+  }
+}
+
+
+const add_point_layer = (id, propName, sMin, sMax) => {
+  if (map.getLayer(id)) map.removeLayer(id)
+  map.addLayer({
+    id: id,
+    source: id,
+    'source-layer': 'my_layer',
+    type: 'circle',
+    paint: {
+      'circle-color': [
+        'interpolate',
+        ['linear'],
+        ['to-number', ['get', propName]],
+        sMin, '#3700f0',
+        sMax, '#ed0707'
+      ],
+      'circle-radius': {
+        'base': 1,
+        'stops': [
+          [0, 10],
+          [9, 5]
+        ]
+      }
+    }
+  })
+}
+
+const add_polygon_layer = (id, propName, sMin, sMax, exag) => {
+  if (map.getLayer(id)) map.removeLayer(id)
+  map.addLayer({
+    id: id,
+    source: id,
+    'source-layer': 'my_layer',
+    type: 'fill-extrusion',
+    paint: {
+      'fill-extrusion-opacity': 1,
+      'fill-extrusion-height': [
+        'interpolate',
+        ['linear'],
+        ['to-number', ['get', propName]],
+        sMin, 0,
+        sMax, sMax * exag
+      ],
+      'fill-extrusion-color': [
+        'interpolate',
+        ['linear'],
+        ['to-number', ['get', propName]],
+        sMin, '#3700f0',
+        sMax, '#ed0707'
+      ]
+    }
+  })
+}
+
+const add_vector_layer = (layerType) => {
+  // remove MVT layers
+  if (map.getLayer('vector-l')) map.removeLayer('vector-l')
+  if (map.getLayer('vector-r')) map.removeLayer('vector-r')
+  if (map.getLayer('vector')) map.removeLayer('vector')
+
+  let sMin = parseFloat(document.getElementById('data-min').value)
+  const sMax = parseFloat(document.getElementById('data-max').value)
+  if (sMin === sMax) sMin = sMin - 0.00001
+
+  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  const propName = active_layer.value
+  const exag = parseFloat(document.getElementById('ex-value').value)
+
+  switch (layerType) {
+    case 'point':
+      if (scope.crossing_dateline) {
+        add_point_layer('vector-l', propName, sMin, sMax)
+        add_point_layer('vector-r', propName, sMin, sMax)
+      } else {
+        add_point_layer('vector', propName, sMin, sMax)
+      }
+      break
+
+    case 'polygon':
+      if (scope.crossing_dateline) {
+        add_polygon_layer('vector-l', propName, sMin, sMax, exag)
+        add_polygon_layer('vector-r', propName, sMin, sMax, exag)
+      } else {
+        add_polygon_layer('vector', propName, sMin, sMax, exag)
+      }
+      break
+
+    default:
+      throw new Error(`Invalid ${layerType}`)
+  }
+}
+
 const set1bViz = () => {
   params = {}
   const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
@@ -404,30 +584,53 @@ const set1bViz = () => {
 
       const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
       let url = `${tilejson_endpoint}?${url_params}`
-
-      map.addSource('raster', { type: 'raster', url: url , tileSize: 256})
-      addLayer(vizType)
+      fetch(`${tilejson_endpoint}?${url_params}`)
+        .then(res => {
+          if (res.ok) return res.json()
+          throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+          add_raster(data)
+        })
+        .catch(err => {
+          console.warn(err)
+        })
       break
 
     case 'point':
-      map.addSource('mvt', {
-        type: 'vector',
-        url: `${tilejson_endpoint}?tile_format=pbf&feature_type=point`
-      })
-      addLayer(vizType)
+      fetch(`${tilejson_endpoint}?tile_format=pbf&feature_type=point`)
+        .then(res => {
+          if (res.ok) return res.json()
+          throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+          add_vector_source(data)
+          add_vector_layer(vizType)
+        })
+        .catch(err => {
+          console.warn(err)
+        })
       break
 
     case 'polygon':
-      map.addSource('mvt', {
-        type: 'vector',
-        url: `${tilejson_endpoint}?tile_format=pbf&feature_type=polygon`
-      })
-      addLayer(vizType)
+      fetch(`${tilejson_endpoint}?tile_format=pbf&feature_type=polygon`)
+        .then(res => {
+          if (res.ok) return res.json()
+          throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+          add_vector_source(data)
+          add_vector_layer(vizType)
+        })
+        .catch(err => {
+          console.warn(err)
+        })
       break
 
     default:
       throw new Error(`Invalid ${vizType}`)
   }
+  if (scope.dataset_statistics) addHisto1Band()
 }
 
 const set3bViz = () => {
@@ -448,19 +651,36 @@ const set3bViz = () => {
   if (url_params !== '') url_params = `${url_params}&`
 
   const bands_params = [r, g, b].map(i => `bands=${i}`).join('&')
-  let url = `${tilejson_endpoint}?${url_params}${bands_params}`
-
-  map.addSource('raster', { type: 'raster', url: url, tileSize: 256})
-  map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
-  if (scope.dataset_statistics) addHisto3Bands()
+  fetch(`${tilejson_endpoint}?${url_params}${bands_params}`)
+    .then(res => {
+      if (res.ok) return res.json()
+      throw new Error('Network response was not ok.');
+    })
+    .then(data => {
+      add_raster(data)
+      if (scope.dataset_statistics) addHisto3Bands()
+    })
+    .catch(err => {
+      console.warn(err)
+    })
 }
 
 const switchViz = () => {
+  // remove Raster layers/sources
+  if (map.getLayer('raster-l')) map.removeLayer('raster-l')
+  if (map.getSource('raster-l')) map.removeSource('raster-l')
+  if (map.getLayer('raster-r')) map.removeLayer('raster-r')
+  if (map.getSource('raster-r')) map.removeSource('raster-r')
   if (map.getLayer('raster')) map.removeLayer('raster')
   if (map.getSource('raster')) map.removeSource('raster')
 
-  if (map.getLayer('mvt')) map.removeLayer('mvt')
-  if (map.getSource('mvt')) { map.removeSource('mvt') }
+  // remove MVT layers/sources
+  if (map.getLayer('vector-l')) map.removeLayer('vector-l')
+  if (map.getLayer('vector-r')) map.removeLayer('vector-r')
+  if (map.getSource('vector-l')) map.removeSource('vector-l')
+  if (map.getSource('vector-r')) map.removeSource('vector-r')
+  if (map.getLayer('vector')) map.removeLayer('vector')
+  if (map.getSource('vector')) map.removeSource('vector')
 
   const rasterType = document.getElementById('toolbar').querySelector(".active").id
   switch (rasterType) {
@@ -472,87 +692,6 @@ const switchViz = () => {
       break
     default:
       throw new Error(`Invalid ${rasterType}`)
-  }
-}
-
-const addLayer = (layerType) => {
-  if (map.getLayer('raster')) map.removeLayer('raster')
-  if (map.getLayer('mvt')) map.removeLayer('mvt')
-
-  let sMin = parseFloat(document.getElementById('data-min').value)
-  const sMax = parseFloat(document.getElementById('data-max').value)
-  if (sMin === sMax) sMin = sMin - 0.00001
-
-  if (scope.dataset_statistics) addHisto1Band()
-
-  const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
-  const propName = active_layer.value
-  const exag = parseFloat(document.getElementById('ex-value').value)
-
-  switch (layerType) {
-    case 'raster':
-      map.addLayer({
-        id: 'raster',
-        type: 'raster',
-        source: 'raster'
-      })
-      break
-
-    case 'point':
-      map.addLayer({
-        id: 'mvt',
-        source: 'mvt',
-        'source-layer': 'my_layer',
-        type: 'circle',
-        paint: {
-          'circle-color': [
-            'interpolate',
-            ['linear'],
-            ['to-number', ['get', propName]],
-            sMin, '#3700f0',
-            sMax, '#ed0707'
-          ],
-          'circle-radius': {
-            'base': 1,
-            'stops': [
-              [0, 10],
-              [9, 5]
-            ]
-          }
-        }
-      })
-
-      break
-
-    case 'polygon':
-      map.addLayer({
-        id: 'mvt',
-        source: 'mvt',
-        'source-layer': 'my_layer',
-        type: 'fill-extrusion',
-        paint: {
-          'fill-extrusion-opacity': 1,
-          'fill-extrusion-height': [
-            'interpolate',
-            ['linear'],
-            ['to-number', ['get', propName]],
-            sMin, 0,
-            sMax, sMax * exag
-          ],
-          'fill-extrusion-color': [
-            'interpolate',
-            ['linear'],
-            ['to-number', ['get', propName]],
-            sMin, '#3700f0',
-            sMax, '#ed0707'
-          ]
-        }
-      })
-
-      break
-
-    default:
-      throw new Error(`Invalid ${layerType}`)
   }
 }
 
@@ -814,7 +953,8 @@ const updateViz = () => {
   if (newViz === "raster") {
     switchViz()
   } else {
-    addLayer(newViz)
+    add_vector_layer(newViz)
+    if (scope.dataset_statistics) addHisto1Band()
   }
 }
 
@@ -875,16 +1015,28 @@ const bboxPolygon = (bounds) => {
 }
 
 const addAOI = (bounds) => {
-  const geojson = {
-      "type": "FeatureCollection",
-      "features": [bboxPolygon(bounds)]
+  if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
+  if (map.getSource('aoi')) map.removeSource('aoi')
+  if (bounds[0] > bounds[2]) {
+    map.addSource('aoi', {
+      'type': 'geojson',
+      'data': {
+        "type": "FeatureCollection",
+        "features": [
+          bboxPolygon([-180, bounds[1], bounds[2], bounds[3]]),
+          bboxPolygon([bounds[0], bounds[1], 180, bounds[3]]),
+        ]
+      }
+    })
+  } else {
+    map.addSource('aoi', {
+      'type': 'geojson',
+      'data': {
+        "type": "FeatureCollection",
+        "features": [bboxPolygon(bounds)]
+      }
+    })
   }
-
-  map.addSource('aoi', {
-    'type': 'geojson',
-    'data': geojson
-  })
-
   map.addLayer({
     id: 'aoi-polygon',
     type: 'line',
@@ -903,7 +1055,7 @@ const addAOI = (bounds) => {
 
 map.on('load', () => {
   map.on('mousemove', (e) => {
-    if (!map.getLayer('mvt')) return
+    if (!map.getLayer('vector') || !map.getLayer('vector-l')) return
     const mouseRadius = 1
     const feature = map.queryRenderedFeatures([
       [e.point.x - mouseRadius, e.point.y - mouseRadius],
@@ -916,7 +1068,7 @@ map.on('load', () => {
     }
   })
 
-  map.on('click', 'mvt', (e) => {
+  const click_vector = (e) => {
     let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
     let values = Object.keys(e.features[0].properties)
     for (var i = 0; i < values.length; i++) {
@@ -932,7 +1084,10 @@ map.on('load', () => {
       .setLngLat(e.lngLat)
       .setHTML(html)
       .addTo(map)
-  })
+  }
+  map.on('click', 'vector', (e) => {click_vector(e)});
+  map.on('click', 'vector-r', (e) => {click_vector(e)});
+  map.on('click', 'vector-l', (e) => {click_vector(e)});
 
   const intersects = (ll, bounds) => {
     if (bounds[0] > bounds[2]) {
@@ -946,9 +1101,7 @@ map.on('load', () => {
 
   // we cannot click on raster layer (mapbox-gl bug)
   map.on('click', (e) => {
-    if (!map.getLayer('raster')) return
-    let bounds = [...map.getSource('raster').bounds]
-    if (intersects(e.lngLat, bounds)) {
+    if ((map.getLayer('raster') || map.getLayer('raster-r')) && intersects(e.lngLat, scope.bounds)) {
       const coord = `${e.lngLat.lng},${e.lngLat.lat}`
       fetch(`${point_endpoint}?coordinates=${coord}`)
         .then(res => {
@@ -957,10 +1110,9 @@ map.on('load', () => {
         })
         .then(data => {
           let html = '<table><tr><th class="align-l">property</th><th class="px3 align-r">value</th></tr>'
-          let values = Object.keys(data.value)
-          for (var i = 0; i < values.length; i++) {
-            let value = data.value[values[i]]
-            let key = scope.band_descriptions[i][1] || scope.band_descriptions[i][0]
+          for (var i = 0; i < scope.band_descriptions.length; i++) {
+            let value = data.values[i]
+            let key = scope.band_descriptions[i][1] || `${scope.band_descriptions[i][0]}`
             html += `<tr><td class="align-l">${key}</td><td class="px3 align-r">${value}</td></tr>`
           }
           html += `<tr><td class="align-l">lon</td><td class="px3 align-r">${e.lngLat.lng.toString().slice(0, 7)}</td></tr>`
@@ -985,6 +1137,7 @@ map.on('load', () => {
     .then(data => {
       console.log(data)
       scope.data_type = data.dtype
+      scope.bounds = data.bounds
 
       if (['uint8','int8'].indexOf(scope.data_type) === -1) document.getElementById('minmax-data').classList.remove('none')
 
@@ -1045,12 +1198,13 @@ map.on('load', () => {
       let bounds = [...data.bounds]
       // Bounds crossing dateline
       if (bounds[0] > bounds[2]) {
+        scope.crossing_dateline = true
         bounds[0] = bounds[0] - 360
       }
       map.fitBounds(
         [[bounds[0], bounds[1]], [bounds[2], bounds[3]]]
       )
-      addAOI(bounds)
+      addAOI(data.bounds)
 
       if (nbands === 1) {
         document.getElementById('3b').classList.add('disabled')

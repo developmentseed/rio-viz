@@ -1,4 +1,10 @@
 
+## 0.10.2 (2023-03-20)
+
+* handle dateline crossing dataset in html viewers
+* fix issue with FastAPI>0.93
+* update FastAPI dependency version
+
 ## 0.10.1 (2023-03-01)
 
 * update titiler requirement

@@ -21,11 +21,12 @@ dynamic = ["version"]
 dependencies = [
     "braceexpand",
     "rio-cogeo>=3.1",
-    "rio-tiler>=4.1.4",
+    "rio-tiler>=4.1.6,<5.0",
     "titiler.core>=0.10.1,<0.12",
     "starlette-cramjam>=0.3,<0.4",
     "uvicorn",
     "server-thread>=0.2.0",
+    "fastapi<0.95",
 ]
 
 [project.optional-dependencies]

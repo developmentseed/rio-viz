@@ -312,6 +312,7 @@ var scope = {
     assets: undefined,
     info: undefined,
     metadata: undefined,
+    crossing_dateline: false
 }
 
 mapboxgl.accessToken = ''
@@ -370,6 +371,52 @@ map.on('zoom', function (e) {
     document.getElementById('zoom').textContent = z
 })
 
+const add_raster = (tilejson) => {
+  if (map.getLayer('raster-l')) map.removeLayer('raster-l')
+  if (map.getSource('raster-l')) map.removeSource('raster-l')
+  if (map.getLayer('raster-r')) map.removeLayer('raster-r')
+  if (map.getSource('raster-r')) map.removeSource('raster-r')
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getSource('raster')) map.removeSource('raster')
+
+  let bounds = [...tilejson.bounds]
+  if (scope.crossing_dateline) {
+    // 2 sources and 2 layers
+    // left
+    map.addSource('raster-l', {
+      type: 'raster',
+      bounds: [-180, bounds[1], bounds[2], bounds[3]],
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster-l', type: 'raster', source: 'raster-l'})
+
+    //right
+    map.addSource('raster-r', {
+      type: 'raster',
+      bounds: [bounds[0], bounds[1], 180, bounds[3]],
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster-r', type: 'raster', source: 'raster-r'})
+
+  } else {
+    map.addSource('raster', {
+      type: 'raster',
+      bounds: tilejson.bounds,
+      minzoom: tilejson.minzoom,
+      maxzoom: tilejson.maxzoom,
+      tiles: tilejson.tiles,
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
+  }
+}
+
 const set1bViz = () => {
     params = {}
 
@@ -391,14 +438,19 @@ const set1bViz = () => {
     if (cmap.value !== 'b&w') params.colormap_name = cmap.value
 
     const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-    let url = `${tilejson_endpoint}?${url_params}`
-
-    map.addSource('raster', { type: 'raster', url: url , tileSize: 256})
-    map.addLayer({ id: 'raster', type: 'raster', source: 'raster' })
-
-    document.getElementById('loader').classList.add('off')
-
-    if (scope.metadata) addHisto1Band()
+    fetch(`${tilejson_endpoint}?${url_params}`)
+      .then(res => {
+        if (res.ok) return res.json()
+        throw new Error('Network response was not ok.');
+      })
+      .then(data => {
+        add_raster(data)
+        document.getElementById('loader').classList.add('off')
+        if (scope.metadata) addHisto1Band()
+      })
+      .catch(err => {
+        console.warn(err)
+      })
 }
 
 const set3bViz = () => {
@@ -429,14 +481,19 @@ const set3bViz = () => {
     }
 
     const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-    let url = `{{ tilejson_endpoint }}?${url_params}&${asset_params}&${indexes_params}`
-
-    map.addSource('raster', { type: 'raster', url: url, tileSize: 256 })
-    map.addLayer({ id: 'raster', type: 'raster', source: 'raster' })
-
-    document.getElementById('loader').classList.add('off')
-
-    if (scope.metadata) addHisto3Bands()
+    fetch(`{{ tilejson_endpoint }}?${url_params}&${asset_params}&${indexes_params}`)
+      .then(res => {
+        if (res.ok) return res.json()
+        throw new Error('Network response was not ok.');
+      })
+      .then(data => {
+        add_raster(data)
+        document.getElementById('loader').classList.add('off')
+        if (scope.metadata) addHisto3Bands()
+      })
+      .catch(err => {
+        console.warn(err)
+      })
 }
 
 const addHisto3Bands = () => {
@@ -654,6 +711,10 @@ const addHisto1Band = () => {
     })
 
 const switchViz = () => {
+    if (map.getLayer('raster-l')) map.removeLayer('raster-l')
+    if (map.getSource('raster-l')) map.removeSource('raster-l')
+    if (map.getLayer('raster-r')) map.removeLayer('raster-r')
+    if (map.getSource('raster-r')) map.removeSource('raster-r')
     if (map.getLayer('raster')) map.removeLayer('raster')
     if (map.getSource('raster')) map.removeSource('raster')
 
@@ -736,36 +797,44 @@ const bboxPolygon = (bounds) => {
 }
 
 const addAOI = (bounds) => {
-    if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
-    if (map.getSource('aoi')) map.removeSource('aoi')
-
-
-    const geojson = {
+  if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
+  if (map.getSource('aoi')) map.removeSource('aoi')
+  if (bounds[0] > bounds[2]) {
+    map.addSource('aoi', {
+      'type': 'geojson',
+      'data': {
+        "type": "FeatureCollection",
+        "features": [
+          bboxPolygon([-180, bounds[1], bounds[2], bounds[3]]),
+          bboxPolygon([bounds[0], bounds[1], 180, bounds[3]]),
+        ]
+      }
+    })
+  } else {
+    map.addSource('aoi', {
+      'type': 'geojson',
+      'data': {
         "type": "FeatureCollection",
         "features": [bboxPolygon(bounds)]
+      }
+    })
+  }
+
+  map.addLayer({
+    id: 'aoi-polygon',
+    type: 'line',
+    source: 'aoi',
+    layout: {
+      'line-cap': 'round',
+      'line-join': 'round'
+    },
+    paint: {
+      'line-color': '#3bb2d0',
+      'line-width': 1
     }
-
-    map.addSource('aoi', {
-        'type': 'geojson',
-        'data': geojson
-    })
-
-    map.addLayer({
-        id: 'aoi-polygon',
-        type: 'line',
-        source: 'aoi',
-        layout: {
-            'line-cap': 'round',
-            'line-join': 'round'
-        },
-        paint: {
-            'line-color': '#3bb2d0',
-            'line-width': 1
-        }
-    })
-    return
+  })
+  return
 }
-
 const updateUI = () => {
     const is_checked = document.getElementById("compose-switch").checked
 
@@ -895,9 +964,11 @@ const updateUI = () => {
         document.getElementById('data-max').value = mm[1]
 
         let bounds = [...info.bounds]
+        scope.crossing_dateline = false
         // Bounds crossing dateline
         if (bounds[0] > bounds[2]) {
             bounds[0] = bounds[0] - 360
+            scope.crossing_dateline = true
         }
         map.fitBounds(
             [[bounds[0], bounds[1]], [bounds[2], bounds[3]]]
