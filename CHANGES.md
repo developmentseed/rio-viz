@@ -1,4 +1,8 @@
 
+# 0.10.3 (2023-03-22)
+
+* switch `/map` viewer to maplibre
+
 ## 0.10.2 (2023-03-20)
 
 * handle dateline crossing dataset in html viewers
