@@ -1,26 +1,27 @@
 """rio_viz app."""
 
 import pathlib
+import sys
 import urllib.parse
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import attr
 import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
 from geojson_pydantic.features import Feature
-from rio_tiler.io import BaseReader, COGReader, MultiBandReader, MultiBaseReader
+from rio_tiler.io import BaseReader, MultiBandReader, MultiBaseReader, Reader
 from rio_tiler.models import BandStatistics, Info
 from server_thread import ServerManager, ServerThread
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp
 from starlette_cramjam.middleware import CompressionMiddleware
+from typing_extensions import Annotated
 
-from rio_viz.resources.enums import RasterFormat, VectorTileFormat, VectorTileType
+from rio_viz.resources.enums import RasterFormat, VectorTileFormat
 
 from titiler.core.dependencies import (
     AssetsBidxExprParamsOptional,
@@ -39,6 +40,7 @@ from titiler.core.dependencies import (
     StatisticsParams,
 )
 from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
+from titiler.core.middleware import CacheControlMiddleware
 from titiler.core.models.mapbox import TileJSON
 from titiler.core.resources.responses import JSONResponse, XMLResponse
 
@@ -56,27 +58,6 @@ templates = Jinja2Templates(directory=template_dir)
 TileFormat = Union[RasterFormat, VectorTileFormat]
 
 
-class CacheControlMiddleware(BaseHTTPMiddleware):
-    """MiddleWare to add CacheControl in response headers."""
-
-    def __init__(self, app: ASGIApp, cachecontrol: str = "no-cache") -> None:
-        """Init Middleware."""
-        super().__init__(app)
-        self.cachecontrol = cachecontrol
-
-    async def dispatch(self, request: Request, call_next):
-        """Add cache-control."""
-        response = await call_next(request)
-        if (
-            not response.headers.get("Cache-Control")
-            and self.cachecontrol
-            and request.method in ["HEAD", "GET"]
-            and response.status_code < 500
-        ):
-            response.headers["Cache-Control"] = self.cachecontrol
-        return response
-
-
 @attr.s
 class viz:
     """Creates a very minimal slippy map tile server using fastAPI + Uvicorn."""
@@ -84,7 +65,7 @@ class viz:
     src_path: str = attr.ib()
     reader: Union[
         Type[BaseReader], Type[MultiBandReader], Type[MultiBaseReader]
-    ] = attr.ib(default=COGReader)
+    ] = attr.ib(default=Reader)
 
     app: FastAPI = attr.ib(default=attr.Factory(FastAPI))
 
@@ -119,7 +100,7 @@ class viz:
             self.reader_type = "cog"
 
         if self.reader_type == "cog":
-            # For simple BaseReader (e.g COGReader) we don't add more dependencies.
+            # For simple BaseReader (e.g Reader) we don't add more dependencies.
             self.info_dependency = DefaultDependency
             self.statistics_dependency = BidxExprParams
             self.layer_dependency = BidxExprParams
@@ -159,7 +140,7 @@ class viz:
             allow_methods=["GET"],
             allow_headers=["*"],
         )
-        self.app.add_middleware(CacheControlMiddleware)
+        self.app.add_middleware(CacheControlMiddleware, cachecontrol="no-cache")
 
     def _update_params(self, src_dst, options: Type[DefaultDependency]):
         """Create Reader options."""
@@ -251,9 +232,10 @@ class viz:
             tags=["API"],
         )
         def point(
-            coordinates: str = Query(
-                ..., description="Coma (',') delimited lon,lat coordinates"
-            ),
+            coordinates: Annotated[
+                str,
+                Query(description="Coma (',') delimited lon,lat coordinates"),
+            ],
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
         ):
@@ -364,9 +346,10 @@ class viz:
             miny: float = Path(..., description="Bounding box min Y"),
             maxx: float = Path(..., description="Bounding box max X"),
             maxy: float = Path(..., description="Bounding box max Y"),
-            format: RasterFormat = Query(
-                RasterFormat.png, description="Output image type."
-            ),
+            format: Annotated[
+                RasterFormat,
+                "Output image type.",
+            ] = RasterFormat.png,
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
@@ -430,9 +413,7 @@ class viz:
         )
         def geojson_part(
             geom: Feature,
-            format: Optional[RasterFormat] = Query(
-                None, description="Output image type."
-            ),
+            format: Annotated[Optional[RasterFormat], "Output image type."] = None,
             layer_params=Depends(self.layer_dependency),
             img_params: ImageParams = Depends(),
             dataset_params: DatasetParams = Depends(),
@@ -454,7 +435,7 @@ class viz:
                 self._update_params(src_dst, layer_params)
 
                 image = src_dst.feature(
-                    geom.dict(exclude_none=True), **layer_params, **dataset_params
+                    geom.model_dump(exclude_none=True), **layer_params, **dataset_params
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
@@ -495,21 +476,23 @@ class viz:
             z: int,
             x: int,
             y: int,
-            format: Optional[TileFormat] = None,
+            format: Annotated[TileFormat, "Output tile type."] = None,
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
-            color_formula: Optional[str] = Query(
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
+            rescale: RescalingParams = Depends(),
+            color_formula: Annotated[
+                Optional[str],
+                Query(
+                    title="Color Formula",
+                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+                ),
+            ] = None,
             colormap: ColorMapParams = Depends(),
-            feature_type: Optional[VectorTileType] = Query(
-                None,
-                title="Feature type (Only for MVT)",
-            ),
+            feature_type: Annotated[
+                Optional[Literal["point", "polygon"]],
+                Query(title="Feature type (Only for MVT)"),
+            ] = None,
             tilesize: Optional[int] = Query(None, description="Tile Size."),
         ):
             """Handle /tiles requests."""
@@ -556,7 +539,7 @@ class viz:
                     image.data,
                     image.mask,
                     image.band_names,
-                    feature_type=feature_type.value,
+                    feature_type=feature_type,
                 )
 
             # Raster Tile
@@ -590,23 +573,30 @@ class viz:
         )
         def tilejson(
             request: Request,
-            tile_format: Optional[TileFormat] = None,
-            layer_params=Depends(self.layer_dependency),  # noqa
-            dataset_params: DatasetParams = Depends(),  # noqa
-            render_params: ImageRenderingParams = Depends(),  # noqa
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(
-                RescalingParams
-            ),  # noqa
-            color_formula: Optional[str] = Query(  # noqa
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
+            tile_format: Annotated[
+                Optional[TileFormat],
+                "Output tile type.",
+            ] = None,
+            layer_params=Depends(self.layer_dependency),
+            dataset_params: DatasetParams = Depends(),
+            render_params: ImageRenderingParams = Depends(),
+            rescale: RescalingParams = Depends(),
+            color_formula: Annotated[
+                Optional[str],
+                Query(
+                    title="Color Formula",
+                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+                ),
+            ] = None,
             colormap: ColorMapParams = Depends(),  # noqa
-            feature_type: str = Query(  # noqa
-                None, title="Feature type", regex="^(point)|(polygon)$"
-            ),
-            tilesize: Optional[int] = Query(None, description="Tile Size."),
+            feature_type: Annotated[
+                Optional[Literal["point", "polygon"]],
+                Query(title="Feature type (Only for MVT)"),
+            ] = None,
+            tilesize: Annotated[
+                Optional[int],
+                Query(description="Tile Size."),
+            ] = None,
         ):
             """Handle /tilejson.json requests."""
             kwargs: Dict[str, Any] = {"z": "{z}", "x": "{x}", "y": "{y}"}
@@ -646,30 +636,34 @@ class viz:
         )
         def wmts(
             request: Request,
-            tile_format: RasterFormat = Query(
-                RasterFormat.png, description="Output image type. Default is png."
-            ),
-            layer_params=Depends(self.layer_dependency),  # noqa
-            dataset_params: DatasetParams = Depends(),  # noqa
-            buffer: Optional[float] = Query(  # noqa
-                None,
-                gt=0,
-                title="Tile buffer.",
-                description="Buffer on each side of the given tile. It must be a multiple of `0.5`. Output **tilesize** will be expanded to `tilesize + 2 * tile_buffer` (e.g 0.5 = 257x257, 1.0 = 258x258).",
-            ),
-            render_params: ImageRenderingParams = Depends(),  # noqa
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(
-                RescalingParams
-            ),  # noqa
-            color_formula: Optional[str] = Query(  # noqa
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
-            colormap: ColorMapParams = Depends(),  # noqa
-            feature_type: str = Query(  # noqa
-                None, title="Feature type", regex="^(point)|(polygon)$"
-            ),
+            tile_format: Annotated[
+                TileFormat,
+                Query(description="Output image type. Default is png."),
+            ] = RasterFormat.png,
+            layer_params=Depends(self.layer_dependency),
+            dataset_params: DatasetParams = Depends(),
+            buffer: Annotated[
+                Optional[float],
+                Query(
+                    gt=0,
+                    title="Tile buffer.",
+                    description="Buffer on each side of the given tile. It must be a multiple of `0.5`. Output **tilesize** will be expanded to `tilesize + 2 * buffer` (e.g 0.5 = 257x257, 1.0 = 258x258).",
+                ),
+            ] = None,
+            render_params: ImageRenderingParams = Depends(),
+            rescale: RescalingParams = Depends(),
+            color_formula: Annotated[
+                Optional[str],
+                Query(
+                    title="Color Formula",
+                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+                ),
+            ] = None,
+            colormap: ColorMapParams = Depends(),
+            feature_type: Annotated[
+                Optional[Literal["point", "polygon"]],
+                Query(title="Feature type (Only for MVT)"),
+            ] = None,
         ):
             """
             This is a hidden gem.
@@ -733,20 +727,26 @@ class viz:
         @self.router.get("/map", response_class=HTMLResponse)
         def map_viewer(
             request: Request,
-            tile_format: Optional[TileFormat] = None,  # noqa
-            layer_params=Depends(self.layer_dependency),  # noqa
-            dataset_params: DatasetParams = Depends(),  # noqa
-            render_params: ImageRenderingParams = Depends(),  # noqa
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(
-                RescalingParams
-            ),  # noqa
-            color_formula: Optional[str] = Query(  # noqa
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
-            colormap: ColorMapParams = Depends(),  # noqa
-            tilesize: Optional[int] = Query(None, description="Tile Size."),  # noqa
+            tile_format: Annotated[
+                Optional[RasterFormat],
+                Query(description="Output raster tile type."),
+            ] = None,
+            layer_params=Depends(self.layer_dependency),
+            dataset_params: DatasetParams = Depends(),
+            render_params: ImageRenderingParams = Depends(),
+            rescale: RescalingParams = Depends(),
+            color_formula: Annotated[
+                Optional[str],
+                Query(
+                    title="Color Formula",
+                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
+                ),
+            ] = None,
+            colormap: ColorMapParams = Depends(),
+            tilesize: Annotated[
+                Optional[int],
+                Query(description="Tile Size."),
+            ] = None,
         ):
             """Return a simple map viewer."""
             tilejson_url = str(request.url_for("tilejson"))

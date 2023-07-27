@@ -1,4 +1,8 @@
 
+# 0.11.0 (2023-07-27)
+
+* update titiler requirement to `>=0.13,<0.14`
+
 # 0.10.3 (2023-03-22)
 
 * switch `/map` viewer to maplibre
