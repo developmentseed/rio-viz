@@ -113,7 +113,7 @@ class MosaicReader(BaseReader):
         info_metadata = (
             self.datasets[item]
             .info()
-            .dict(
+            .model_dump(
                 exclude={
                     "bounds",
                     "minzoom",

@@ -79,10 +79,3 @@ class VectorTileFormat(DataFormat):
 
     pbf = "pbf"
     mvt = "mvt"
-
-
-class VectorTileType(str, Enum):
-    """Available Output Vector Tile type."""
-
-    point = "point"
-    polygon = "polygon"
