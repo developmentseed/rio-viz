@@ -3,7 +3,7 @@
 import pathlib
 import sys
 import urllib.parse
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import attr
 import rasterio
@@ -23,6 +23,8 @@ from typing_extensions import Annotated
 
 from rio_viz.resources.enums import RasterFormat, VectorTileFormat
 
+from titiler.core.algorithm import BaseAlgorithm
+from titiler.core.algorithm import algorithms as available_algorithms
 from titiler.core.dependencies import (
     AssetsBidxExprParamsOptional,
     AssetsBidxParams,
@@ -284,6 +286,7 @@ class viz:
                 description="rio-color formula (info: https://github.com/mapbox/rio-color)",
             ),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /preview requests."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
@@ -299,6 +302,9 @@ class viz:
                     **img_params,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
+
+            if post_process:
+                image = post_process(image)
 
             if rescale:
                 image.rescale(rescale)
@@ -361,6 +367,7 @@ class viz:
                 description="rio-color formula (info: https://github.com/mapbox/rio-color)",
             ),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Create image from part of a dataset."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
@@ -377,6 +384,9 @@ class viz:
                     **img_params,
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
+
+            if post_process:
+                image = post_process(image)
 
             if rescale:
                 image.rescale(rescale)
@@ -425,6 +435,7 @@ class viz:
                 description="rio-color formula (info: https://github.com/mapbox/rio-color)",
             ),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /feature requests."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
@@ -438,6 +449,9 @@ class viz:
                     geom.model_dump(exclude_none=True), **layer_params, **dataset_params
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
+
+            if post_process:
+                image = post_process(image)
 
             if rescale:
                 image.rescale(rescale)
@@ -494,6 +508,7 @@ class viz:
                 Query(title="Feature type (Only for MVT)"),
             ] = None,
             tilesize: Optional[int] = Query(None, description="Tile Size."),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /tiles requests."""
             default_tilesize = 256
@@ -544,6 +559,9 @@ class viz:
 
             # Raster Tile
             else:
+                if post_process:
+                    image = post_process(image)
+
                 if rescale:
                     image.rescale(rescale)
 
@@ -588,7 +606,8 @@ class viz:
                     description="rio-color formula (info: https://github.com/mapbox/rio-color)",
                 ),
             ] = None,
-            colormap: ColorMapParams = Depends(),  # noqa
+            colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
             feature_type: Annotated[
                 Optional[Literal["point", "polygon"]],
                 Query(title="Feature type (Only for MVT)"),
@@ -660,6 +679,7 @@ class viz:
                 ),
             ] = None,
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
             feature_type: Annotated[
                 Optional[Literal["point", "polygon"]],
                 Query(title="Feature type (Only for MVT)"),
@@ -743,6 +763,7 @@ class viz:
                 ),
             ] = None,
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
             tilesize: Annotated[
                 Optional[int],
                 Query(description="Tile Size."),

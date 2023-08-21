@@ -1,4 +1,8 @@
 
+# 0.12.0 (2023-08-21)
+
+* add Algorithm support amd update basemap source
+
 # 0.11.0 (2023-07-27)
 
 * update titiler requirement to `>=0.13,<0.14`
