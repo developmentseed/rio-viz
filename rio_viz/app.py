@@ -1,7 +1,6 @@
 """rio_viz app."""
 
 import pathlib
-import sys
 import urllib.parse
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
@@ -17,12 +16,12 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.templating import Jinja2Templates
-from starlette.types import ASGIApp
 from starlette_cramjam.middleware import CompressionMiddleware
 from typing_extensions import Annotated
 
 from rio_viz.resources.enums import RasterFormat, VectorTileFormat
 
+from titiler.core.algorithm import algorithms as available_algorithms
 from titiler.core.dependencies import (
     AssetsBidxExprParamsOptional,
     AssetsBidxParams,
@@ -30,12 +29,14 @@ from titiler.core.dependencies import (
     BandsExprParamsOptional,
     BandsParams,
     BidxExprParams,
+    ColorFormulaParams,
     ColorMapParams,
     DatasetParams,
     DefaultDependency,
     HistogramParams,
-    ImageParams,
     ImageRenderingParams,
+    PartFeatureParams,
+    PreviewParams,
     RescalingParams,
     StatisticsParams,
 )
@@ -43,6 +44,7 @@ from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.middleware import CacheControlMiddleware
 from titiler.core.models.mapbox import TileJSON
 from titiler.core.resources.responses import JSONResponse, XMLResponse
+from titiler.core.utils import render_image
 
 try:
     from rio_tiler_mvt import pixels_encoder  # noqa
@@ -204,7 +206,7 @@ class viz:
         )
         def statistics(
             layer_params=Depends(self.statistics_dependency),
-            image_params: ImageParams = Depends(),
+            image_params: PreviewParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             stats_params: StatisticsParams = Depends(),
             histogram_params: HistogramParams = Depends(),
@@ -269,21 +271,18 @@ class viz:
             "description": "Return a preview.",
         }
 
-        @self.router.get(r"/preview", **preview_params, tags=["API"])
-        @self.router.get(r"/preview.{format}", **preview_params, tags=["API"])
+        @self.router.get("/preview", **preview_params, tags=["API"])
+        @self.router.get("/preview.{format}", **preview_params, tags=["API"])
         def preview(
             format: Optional[RasterFormat] = None,
             layer_params=Depends(self.layer_dependency),
-            img_params: ImageParams = Depends(),
+            img_params: PreviewParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
-            color_formula: Optional[str] = Query(
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
+            rescale: RescalingParams = Depends(),
+            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /preview requests."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
@@ -300,25 +299,23 @@ class viz:
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
+            if post_process:
+                image = post_process(image)
+
             if rescale:
                 image.rescale(rescale)
 
             if color_formula:
                 image.apply_color_formula(color_formula)
 
-            if cmap := colormap or dst_colormap:
-                image = image.apply_colormap(cmap)
-
-            if not format:
-                format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
-
-            content = image.render(
-                img_format=format.driver,
-                **format.profile,
+            content, media_type = render_image(
+                image,
+                output_format=format,
+                colormap=colormap or dst_colormap,
                 **render_params,
             )
 
-            return Response(content, media_type=format.mediatype)
+            return Response(content, media_type=media_type)
 
         part_params = {
             "responses": {
@@ -332,35 +329,32 @@ class viz:
         }
 
         @self.router.get(
-            r"/crop/{minx},{miny},{maxx},{maxy}.{format}",
+            "/bbox/{minx},{miny},{maxx},{maxy}.{format}",
             **part_params,
             tags=["API"],
         )
         @self.router.get(
-            r"/crop/{minx},{miny},{maxx},{maxy}/{width}x{height}.{format}",
+            "/bbox/{minx},{miny},{maxx},{maxy}/{width}x{height}.{format}",
             **part_params,
             tags=["API"],
         )
         def part(
-            minx: float = Path(..., description="Bounding box min X"),
-            miny: float = Path(..., description="Bounding box min Y"),
-            maxx: float = Path(..., description="Bounding box max X"),
-            maxy: float = Path(..., description="Bounding box max Y"),
+            minx: Annotated[float, Path(description="Bounding box min X")],
+            miny: Annotated[float, Path(description="Bounding box min Y")],
+            maxx: Annotated[float, Path(description="Bounding box max X")],
+            maxy: Annotated[float, Path(description="Bounding box max Y")],
             format: Annotated[
                 RasterFormat,
                 "Output image type.",
             ] = RasterFormat.png,
             layer_params=Depends(self.layer_dependency),
-            img_params: ImageParams = Depends(),
+            img_params: PartFeatureParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
-            color_formula: Optional[str] = Query(
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
+            rescale: RescalingParams = Depends(),
+            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Create image from part of a dataset."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
@@ -378,22 +372,23 @@ class viz:
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
+            if post_process:
+                image = post_process(image)
+
             if rescale:
                 image.rescale(rescale)
 
             if color_formula:
                 image.apply_color_formula(color_formula)
 
-            if cmap := colormap or dst_colormap:
-                image = image.apply_colormap(cmap)
-
-            content = image.render(
-                img_format=format.driver,
-                **format.profile,
+            content, media_type = render_image(
+                image,
+                output_format=format,
+                colormap=colormap or dst_colormap,
                 **render_params,
             )
 
-            return Response(content, media_type=format.mediatype)
+            return Response(content, media_type=media_type)
 
         feature_params = {
             "responses": {
@@ -406,25 +401,22 @@ class viz:
             "description": "Return part of a dataset defined by a geojson feature.",
         }
 
-        @self.router.post(r"/crop", **feature_params, tags=["API"])
-        @self.router.post(r"/crop.{format}", **feature_params, tags=["API"])
+        @self.router.post("/feature", **feature_params, tags=["API"])
+        @self.router.post("/feature.{format}", **feature_params, tags=["API"])
         @self.router.post(
-            r"/crop/{width}x{height}.{format}", **feature_params, tags=["API"]
+            "/feature/{width}x{height}.{format}", **feature_params, tags=["API"]
         )
         def geojson_part(
             geom: Feature,
             format: Annotated[Optional[RasterFormat], "Output image type."] = None,
             layer_params=Depends(self.layer_dependency),
-            img_params: ImageParams = Depends(),
+            img_params: PartFeatureParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: Optional[List[Tuple[float, ...]]] = Depends(RescalingParams),
-            color_formula: Optional[str] = Query(
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
+            rescale: RescalingParams = Depends(),
+            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /feature requests."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
@@ -439,25 +431,23 @@ class viz:
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
+            if post_process:
+                image = post_process(image)
+
             if rescale:
                 image.rescale(rescale)
 
             if color_formula:
                 image.apply_color_formula(color_formula)
 
-            if cmap := colormap or dst_colormap:
-                image = image.apply_colormap(cmap)
-
-            if not format:
-                format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
-
-            content = image.render(
-                img_format=format.driver,
-                **format.profile,
+            content, media_type = render_image(
+                image,
+                output_format=format,
+                colormap=colormap or dst_colormap,
                 **render_params,
             )
 
-            return Response(content, media_type=format.mediatype)
+            return Response(content, media_type=media_type)
 
         tile_params = {
             "responses": {
@@ -470,30 +460,43 @@ class viz:
             "description": "Read COG and return a tile",
         }
 
-        @self.router.get(r"/tiles/{z}/{x}/{y}", **tile_params, tags=["API"])
-        @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **tile_params, tags=["API"])
+        @self.router.get("/tiles/{z}/{x}/{y}", **tile_params, tags=["API"])
+        @self.router.get("/tiles/{z}/{x}/{y}.{format}", **tile_params, tags=["API"])
         def tile(
-            z: int,
-            x: int,
-            y: int,
+            z: Annotated[
+                int,
+                Path(
+                    description="Identifier (Z) selecting one of the scales defined in the TileMatrixSet and representing the scaleDenominator the tile.",
+                ),
+            ],
+            x: Annotated[
+                int,
+                Path(
+                    description="Column (X) index of the tile on the selected TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
+                ),
+            ],
+            y: Annotated[
+                int,
+                Path(
+                    description="Row (Y) index of the tile on the selected TileMatrix. It cannot exceed the MatrixWidth-1 for the selected TileMatrix.",
+                ),
+            ],
             format: Annotated[TileFormat, "Output tile type."] = None,
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
             rescale: RescalingParams = Depends(),
-            color_formula: Annotated[
-                Optional[str],
-                Query(
-                    title="Color Formula",
-                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-                ),
-            ] = None,
+            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
             feature_type: Annotated[
                 Optional[Literal["point", "polygon"]],
                 Query(title="Feature type (Only for MVT)"),
             ] = None,
-            tilesize: Optional[int] = Query(None, description="Tile Size."),
+            tilesize: Annotated[
+                Optional[int],
+                Query(description="Tile Size."),
+            ] = None,
+            post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /tiles requests."""
             default_tilesize = 256
@@ -542,27 +545,27 @@ class viz:
                     feature_type=feature_type,
                 )
 
+                media_type = format.mediatype
+
             # Raster Tile
             else:
+                if post_process:
+                    image = post_process(image)
+
                 if rescale:
                     image.rescale(rescale)
 
                 if color_formula:
                     image.apply_color_formula(color_formula)
 
-                if cmap := colormap or dst_colormap:
-                    image = image.apply_colormap(cmap)
-
-                if not format:
-                    format = RasterFormat.jpeg if image.mask.all() else RasterFormat.png
-
-                content = image.render(
-                    img_format=format.driver,
-                    **format.profile,
+                content, media_type = render_image(
+                    image,
+                    output_format=format,
+                    colormap=colormap or dst_colormap,
                     **render_params,
                 )
 
-            return Response(content, media_type=format.mediatype)
+            return Response(content, media_type=media_type)
 
         @self.router.get(
             "/tilejson.json",
@@ -581,14 +584,9 @@ class viz:
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
             rescale: RescalingParams = Depends(),
-            color_formula: Annotated[
-                Optional[str],
-                Query(
-                    title="Color Formula",
-                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-                ),
-            ] = None,
-            colormap: ColorMapParams = Depends(),  # noqa
+            color_formula: ColorFormulaParams = Depends(),
+            colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
             feature_type: Annotated[
                 Optional[Literal["point", "polygon"]],
                 Query(title="Feature type (Only for MVT)"),
@@ -642,24 +640,11 @@ class viz:
             ] = RasterFormat.png,
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
-            buffer: Annotated[
-                Optional[float],
-                Query(
-                    gt=0,
-                    title="Tile buffer.",
-                    description="Buffer on each side of the given tile. It must be a multiple of `0.5`. Output **tilesize** will be expanded to `tilesize + 2 * buffer` (e.g 0.5 = 257x257, 1.0 = 258x258).",
-                ),
-            ] = None,
             render_params: ImageRenderingParams = Depends(),
             rescale: RescalingParams = Depends(),
-            color_formula: Annotated[
-                Optional[str],
-                Query(
-                    title="Color Formula",
-                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-                ),
-            ] = None,
+            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
             feature_type: Annotated[
                 Optional[Literal["point", "polygon"]],
                 Query(title="Feature type (Only for MVT)"),
@@ -735,14 +720,9 @@ class viz:
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
             rescale: RescalingParams = Depends(),
-            color_formula: Annotated[
-                Optional[str],
-                Query(
-                    title="Color Formula",
-                    description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-                ),
-            ] = None,
+            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
+            post_process=Depends(available_algorithms.dependency),
             tilesize: Annotated[
                 Optional[int],
                 Query(description="Tile Size."),
