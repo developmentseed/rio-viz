@@ -89,13 +89,13 @@ def test_viz():
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/crop/-2.00,48.5,-1,49.5.png?rescale=1,10&colormap_name=cfastie"
+        "/bbox/-2.00,48.5,-1,49.5.png?rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
     response = client.get(
-        "/crop/-2.00,48.5,-1,49.5/100x100.jpeg?&rescale=1,10&colormap_name=cfastie"
+        "/bbox/-2.00,48.5,-1,49.5/100x100.jpeg?&rescale=1,10&colormap_name=cfastie"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
@@ -162,20 +162,20 @@ def test_viz():
         }
     )
 
-    response = client.post("/crop", data=feat)
+    response = client.post("/feature", data=feat)
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.post("/crop.jpeg", data=feat)
+    response = client.post("/feature.jpeg", data=feat)
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
 
-    response = client.post("/crop/100x100.jpeg", data=feat)
+    response = client.post("/feature/100x100.jpeg", data=feat)
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
 
     response = client.post(
-        "/crop.jpeg",
+        "/feature.jpeg",
         params={"bidx": 1, "rescale": "1,10", "colormap_name": "cfastie"},
         data=feat,
     )
@@ -396,7 +396,7 @@ def test_viz_mosaic():
         client.get("/preview")
 
     with pytest.raises(NotImplementedError):
-        client.get("/crop/-2.00,48.5,-1,49.5.png")
+        client.get("/bbox/-2.00,48.5,-1,49.5.png")
 
     # Point is Outside COGs bounds
     response = client.get("/point?coordinates=-2,48")

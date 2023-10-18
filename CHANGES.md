@@ -1,7 +1,20 @@
 
-# 0.12.0 (2023-08-21)
+# 0.12.0 (TBD)
 
-* add Algorithm support amd update basemap source
+* add Algorithm support and update basemap source
+* update titiler requirement to `>=0.14,<0.15`
+
+- renamed `/crop` endpoints to `/bbox/...` or `/feature/...`
+  - `/crop/{minx},{miny},{maxx},{maxy}.{format}` -> `/bbox/{minx},{miny},{maxx},{maxy}.{format}`
+
+  - `/crop/{minx},{miny},{maxx},{maxy}/{width}x{height}.{format}` -> `/bbox/{minx},{miny},{maxx},{maxy}/{width}x{height}.{format}`
+
+  - `/crop [POST]` -> `/feature [POST]`
+
+  - `/crop.{format} [POST]` -> `/feature.{format} [POST]`
+
+  - `/crop/{width}x{height}.{format}  [POST]` -> `/feature/{width}x{height}.{format} [POST]`
+
 
 # 0.11.0 (2023-07-27)
 
