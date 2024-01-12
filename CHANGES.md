@@ -1,5 +1,5 @@
 
-# 0.12.0 (TBD)
+# 0.12.0 (2024-01-12)
 
 * add Algorithm support and update basemap source
 * update titiler requirement to `>=0.16,<0.17`
