@@ -2,7 +2,7 @@
 # 0.12.0 (TBD)
 
 * add Algorithm support and update basemap source
-* update titiler requirement to `>=0.14,<0.15`
+* update titiler requirement to `>=0.16,<0.17`
 
 - renamed `/crop` endpoints to `/bbox/...` or `/feature/...`
   - `/crop/{minx},{miny},{maxx},{maxy}.{format}` -> `/bbox/{minx},{miny},{maxx},{maxy}.{format}`

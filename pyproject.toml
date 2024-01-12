@@ -21,7 +21,7 @@ dynamic = ["version"]
 dependencies = [
     "braceexpand",
     "rio-cogeo>=5.0",
-    "titiler.core>=0.15.0,<0.16",
+    "titiler.core>=0.16.0,<0.17",
     "starlette-cramjam>=0.3,<0.4",
     "uvicorn",
     "server-thread>=0.2.0",

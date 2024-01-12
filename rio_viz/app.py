@@ -5,6 +5,7 @@ import urllib.parse
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import attr
+import jinja2
 import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
@@ -54,8 +55,10 @@ except ModuleNotFoundError:
     has_mvt = False
     pixels_encoder = None
 
-template_dir = str(pathlib.Path(__file__).parent.joinpath("templates"))
-templates = Jinja2Templates(directory=template_dir)
+jinja2_env = jinja2.Environment(
+    loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
+)
+templates = Jinja2Templates(env=jinja2_env)
 
 TileFormat = Union[RasterFormat, VectorTileFormat]
 
