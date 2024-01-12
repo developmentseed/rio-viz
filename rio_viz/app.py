@@ -216,7 +216,7 @@ class viz:
         ):
             """Handle /stats requests."""
             with self.reader(self.src_path) as src_dst:
-                if self.nodata is not None and dataset_params.nodata is not None:
+                if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
@@ -247,7 +247,7 @@ class viz:
             """Handle /point requests."""
             lon, lat = list(map(float, coordinates.split(",")))
             with self.reader(self.src_path) as src_dst:  # type: ignore
-                if self.nodata is not None and dataset_params.nodata is not None:
+                if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
@@ -289,7 +289,7 @@ class viz:
         ):
             """Handle /preview requests."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
-                if self.nodata is not None and dataset_params.nodata is not None:
+                if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
@@ -361,7 +361,7 @@ class viz:
         ):
             """Create image from part of a dataset."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
-                if self.nodata is not None and dataset_params.nodata is not None:
+                if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
@@ -423,7 +423,7 @@ class viz:
         ):
             """Handle /feature requests."""
             with self.reader(self.src_path) as src_dst:  # type: ignore
-                if self.nodata is not None and dataset_params.nodata is not None:
+                if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type
@@ -510,7 +510,7 @@ class viz:
             tilesize = tilesize or default_tilesize
 
             with self.reader(self.src_path) as src_dst:  # type: ignore
-                if self.nodata is not None and dataset_params.nodata is not None:
+                if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
                 # Adapt options for each reader type

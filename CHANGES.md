@@ -1,3 +1,6 @@
+# 0.12.1 (2024-01-12)
+
+* fix invalid nodata overwriting
 
 # 0.12.0 (2024-01-12)
 
