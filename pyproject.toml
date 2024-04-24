@@ -15,13 +15,14 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: GIS",
 ]
 dynamic = ["version"]
 dependencies = [
     "braceexpand",
     "rio-cogeo>=5.0",
-    "titiler.core>=0.16.0,<0.17",
+    "titiler.core>=0.16.0,<0.19",
     "starlette-cramjam>=0.3,<0.4",
     "uvicorn",
     "server-thread>=0.2.0",
@@ -48,19 +49,25 @@ Source = "https://github.com/developmentseed/rio-viz"
 viz = "rio_viz.scripts.cli:viz"
 
 [build-system]
-requires = ["flit>=3.2,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.flit.module]
-name = "rio_viz"
+[tool.hatch.version]
+path = "rio_viz/__init__.py"
 
-[tool.flit.sdist]
+[tool.hatch.build.targets.sdist]
 exclude = [
-    "tests/",
-    "docs/",
-    ".github/",
-    "CHANGES.md",
-    "CONTRIBUTING.md",
+  "/tests",
+  ".ruff_cache/",
+  "examples/",
+  ".github",
+  ".history",
+  ".bumpversion.cfg",
+  ".gitignore",
+  "Dockerfile",
+  ".pre-commit-config.yaml",
+  "CHANGES.md",
+  "CONTRIBUTING.md",
 ]
 
 [tool.isort]
@@ -74,10 +81,14 @@ default_section = "THIRDPARTY"
 no_strict_optional = true
 
 [tool.ruff]
+line-length = 90
+
+[tool.ruff.lint]
 select = [
     "D1",  # pydocstyle errors
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
+    "F",  # flake8
     "C",  # flake8-comprehensions
     "B",  # flake8-bugbear
 ]
@@ -85,4 +96,8 @@ ignore = [
     "E501",  # line too long, handled by black
     "B008",  # do not perform function calls in argument defaults
     "B905",  # ignore zip() without an explicit strict= parameter, only support with python >3.10
+    "B028",
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
