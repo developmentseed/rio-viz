@@ -1,6 +1,5 @@
 """rio_viz app."""
 
-import pathlib
 import urllib.parse
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
@@ -68,9 +67,9 @@ class viz:
     """Creates a very minimal slippy map tile server using fastAPI + Uvicorn."""
 
     src_path: str = attr.ib()
-    reader: Union[
-        Type[BaseReader], Type[MultiBandReader], Type[MultiBaseReader]
-    ] = attr.ib(default=Reader)
+    reader: Union[Type[BaseReader], Type[MultiBandReader], Type[MultiBaseReader]] = (
+        attr.ib(default=Reader)
+    )
 
     app: FastAPI = attr.ib(default=attr.Factory(FastAPI))
 
@@ -616,9 +615,7 @@ class viz:
 
             with self.reader(self.src_path) as src_dst:  # type: ignore
                 bounds = (
-                    self.bounds
-                    if self.bounds is not None
-                    else src_dst.geographic_bounds
+                    self.bounds if self.bounds is not None else src_dst.geographic_bounds
                 )
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
@@ -678,9 +675,7 @@ class viz:
 
             with self.reader(self.src_path) as src_dst:  # type: ignore
                 bounds = (
-                    self.bounds
-                    if self.bounds is not None
-                    else src_dst.geographic_bounds
+                    self.bounds if self.bounds is not None else src_dst.geographic_bounds
                 )
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
@@ -699,9 +694,9 @@ class viz:
                 tileMatrix.append(tm)
 
             return templates.TemplateResponse(
-                "wmts.xml",
-                {
-                    "request": request,
+                request,
+                name="wmts.xml",
+                context={
                     "tiles_endpoint": tiles_endpoint,
                     "bounds": bounds,
                     "tileMatrix": tileMatrix,
@@ -738,9 +733,9 @@ class viz:
                 tilejson_url += f"?{request.query_params}"
 
             return templates.TemplateResponse(
+                request,
                 name="map.html",
                 context={
-                    "request": request,
                     "tilejson_endpoint": tilejson_url,
                 },
                 media_type="text/html",
@@ -768,9 +763,9 @@ class viz:
                 name = "assets.html"
 
             return templates.TemplateResponse(
+                request,
                 name=name,
                 context={
-                    "request": request,
                     "tilejson_endpoint": str(request.url_for("tilejson")),
                     "stats_endpoint": str(request.url_for("statistics")),
                     "info_endpoint": str(request.url_for("info")),

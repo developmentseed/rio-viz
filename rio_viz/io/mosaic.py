@@ -101,9 +101,9 @@ class MosaicReader(BaseReader):
         def _reader(asset: str, lon: float, lat: float, **kwargs) -> PointData:
             return self.datasets[asset].point(lon, lat, **kwargs)
 
-        return mosaic_point_reader(
-            mosaic_assets, _reader, lon, lat, threads=0, **kwargs
-        )[0]
+        return mosaic_point_reader(mosaic_assets, _reader, lon, lat, threads=0, **kwargs)[
+            0
+        ]
 
     def info(self) -> Info:
         """info."""

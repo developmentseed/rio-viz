@@ -1,3 +1,10 @@
+# 0.12.2 (2024-04-24)
+
+* update titiler dependency to `>=0.16,<0.19`
+* add python 3.12 official support
+* change code formatter to `ruff-format`
+* switch to Hatch
+
 # 0.12.1 (2024-01-12)
 
 * fix invalid nodata overwriting
