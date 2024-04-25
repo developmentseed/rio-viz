@@ -7,6 +7,7 @@ RUN apt-get update
 COPY rio_viz rio_viz
 COPY pyproject.toml pyproject.toml
 COPY README.md README.md
+COPY LICENSE LICENSE
 
 RUN pip install . rasterio>=1.3b1 --no-cache-dir --upgrade
 
