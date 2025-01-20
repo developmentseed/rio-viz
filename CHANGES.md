@@ -1,5 +1,6 @@
 # 0.13.0 (2025-01-20)
 
+* remove python 3.8 support
 * update titiler dependency to `>=0.20,<0.21`
 * remove docker image publishing
 

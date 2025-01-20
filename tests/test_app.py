@@ -38,44 +38,50 @@ def test_viz():
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-cache"
 
-    response = client.get("/tiles/7/64/43.png?rescale=1,10")
+    response = client.get("/tiles/WebMercatorQuad/7/64/43.png?rescale=1,10")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert response.headers["cache-control"] == "no-cache"
 
     response = client.get(
-        "/tiles/7/64/43.png?rescale=1,10&bidx=1&color_formula=Gamma R 3"
+        "/tiles/WebMercatorQuad/7/64/43.png?rescale=1,10&bidx=1&color_formula=Gamma R 3"
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43.png?rescale=1,10&bidx=1&bidx=1&bidx=1")
+    response = client.get(
+        "/tiles/WebMercatorQuad/7/64/43.png?rescale=1,10&bidx=1&bidx=1&bidx=1"
+    )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43.png?rescale=1,10&colormap_name=cfastie")
+    response = client.get(
+        "/tiles/WebMercatorQuad/7/64/43.png?rescale=1,10&colormap_name=cfastie"
+    )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/7/64/43?rescale=1,10&colormap_name=cfastie")
+    response = client.get(
+        "/tiles/WebMercatorQuad/7/64/43?rescale=1,10&colormap_name=cfastie"
+    )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
 
-    response = client.get("/tiles/18/8624/119094.png")
+    response = client.get("/tiles/WebMercatorQuad/18/8624/119094.png")
     assert response.status_code == 404
 
-    response = client.get("/tiles/18/8624/119094.pbf")
+    response = client.get("/tiles/WebMercatorQuad/18/8624/119094.pbf")
     assert response.status_code == 404
 
-    response = client.get("/tiles/7/64/43.pbf")
+    response = client.get("/tiles/WebMercatorQuad/7/64/43.pbf")
     assert response.status_code == 500
     assert not response.headers.get("cache-control")
 
-    response = client.get("/tiles/7/64/43.pbf?feature_type=polygon")
+    response = client.get("/tiles/WebMercatorQuad/7/64/43.pbf?feature_type=polygon")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
-    response = client.get("/tiles/7/64/43.pbf?feature_type=point")
+    response = client.get("/tiles/WebMercatorQuad/7/64/43.pbf?feature_type=point")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/x-protobuf"
 
@@ -387,7 +393,7 @@ def test_viz_mosaic():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
-    response = client.get("/tiles/8/75/91?rescale=1,10")
+    response = client.get("/tiles/WebMercatorQuad/8/75/91?rescale=1,10")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert response.headers["cache-control"] == "no-cache"
