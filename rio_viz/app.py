@@ -9,6 +9,8 @@ import rasterio
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
 from geojson_pydantic.features import Feature
+from geojson_pydantic.geometries import MultiPolygon, Polygon
+from rio_tiler.constants import WGS84_CRS
 from rio_tiler.io import BaseReader, MultiBandReader, MultiBaseReader, Reader
 from rio_tiler.models import BandStatistics, Info
 from server_thread import ServerManager, ServerThread
@@ -29,21 +31,28 @@ from titiler.core.dependencies import (
     BandsExprParamsOptional,
     BandsParams,
     BidxExprParams,
-    ColorFormulaParams,
     ColorMapParams,
+    CoordCRSParams,
+    CRSParams,
     DatasetParams,
     DefaultDependency,
+    DstCRSParams,
     HistogramParams,
     ImageRenderingParams,
     PartFeatureParams,
     PreviewParams,
-    RescalingParams,
     StatisticsParams,
+    TileParams,
 )
 from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.middleware import CacheControlMiddleware
 from titiler.core.models.mapbox import TileJSON
-from titiler.core.resources.responses import JSONResponse, XMLResponse
+from titiler.core.models.responses import (
+    InfoGeoJSON,
+    MultiBaseInfo,
+    MultiBaseInfoGeoJSON,
+)
+from titiler.core.resources.responses import GeoJSONResponse, JSONResponse, XMLResponse
 from titiler.core.utils import render_image
 
 try:
@@ -70,12 +79,12 @@ class viz:
     reader: Union[Type[BaseReader], Type[MultiBandReader], Type[MultiBaseReader]] = (
         attr.ib(default=Reader)
     )
-
-    app: FastAPI = attr.ib(default=attr.Factory(FastAPI))
+    reader_params: Dict = attr.ib(factory=dict)
+    app: FastAPI = attr.ib(factory=FastAPI)
 
     port: int = attr.ib(default=8080)
     host: str = attr.ib(default="127.0.0.1")
-    config: Dict = attr.ib(default=dict)
+    config: Dict = attr.ib(factory=dict)
 
     minzoom: Optional[int] = attr.ib(default=None)
     maxzoom: Optional[int] = attr.ib(default=None)
@@ -181,8 +190,7 @@ class viz:
         @self.router.get(
             "/info",
             # for MultiBaseReader the output in `Dict[str, Info]`
-            response_model=Dict[str, Info] if self.reader_type == "assets" else Info,
-            response_model_exclude={"minzoom", "maxzoom", "center"},
+            response_model=MultiBaseInfo if self.reader_type == "assets" else Info,
             response_model_exclude_none=True,
             response_class=JSONResponse,
             responses={200: {"description": "Return the info of the COG."}},
@@ -190,10 +198,52 @@ class viz:
         )
         def info(params=Depends(self.info_dependency)):
             """Handle /info requests."""
-            with self.reader(self.src_path) as src_dst:
+            with self.reader(self.src_path, **self.reader_params) as src_dst:
                 # Adapt options for each reader type
                 self._update_params(src_dst, params)
-                return src_dst.info(**params)
+                return src_dst.info(**params.as_dict())
+
+        @self.router.get(
+            "/info.geojson",
+            # for MultiBaseReader the output in `Dict[str, Info]`
+            response_model=MultiBaseInfoGeoJSON
+            if self.reader_type == "assets"
+            else InfoGeoJSON,
+            response_model_exclude_none=True,
+            response_class=GeoJSONResponse,
+            responses={
+                200: {
+                    "content": {"application/geo+json": {}},
+                    "description": "Return dataset's basic info as a GeoJSON feature.",
+                }
+            },
+            tags=["API"],
+        )
+        def info_geojson(
+            params=Depends(self.info_dependency),
+            crs=Depends(CRSParams),
+        ):
+            """Handle /info requests."""
+            with self.reader(self.src_path, **self.reader_params) as src_dst:
+                bounds = src_dst.get_geographic_bounds(crs or WGS84_CRS)
+                if bounds[0] > bounds[2]:
+                    pl = Polygon.from_bounds(-180, bounds[1], bounds[2], bounds[3])
+                    pr = Polygon.from_bounds(bounds[0], bounds[1], 180, bounds[3])
+                    geometry = MultiPolygon(
+                        type="MultiPolygon",
+                        coordinates=[pl.coordinates, pr.coordinates],
+                    )
+                else:
+                    geometry = Polygon.from_bounds(*bounds)
+
+                # Adapt options for each reader type
+                self._update_params(src_dst, params)
+                return Feature(
+                    type="Feature",
+                    bbox=bounds,
+                    geometry=geometry,
+                    properties=src_dst.info(**params.as_dict()),
+                )
 
         @self.router.get(
             "/statistics",
@@ -214,7 +264,7 @@ class viz:
             histogram_params: HistogramParams = Depends(),
         ):
             """Handle /stats requests."""
-            with self.reader(self.src_path) as src_dst:
+            with self.reader(self.src_path, **self.reader_params) as src_dst:
                 if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
@@ -222,11 +272,11 @@ class viz:
                 self._update_params(src_dst, layer_params)
 
                 return src_dst.statistics(
-                    **layer_params,
-                    **dataset_params,
-                    **image_params,
-                    **stats_params,
-                    hist_options={**histogram_params},
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
+                    **image_params.as_dict(),
+                    **stats_params.as_dict(),
+                    hist_options=histogram_params.as_dict(),
                 )
 
         @self.router.get(
@@ -245,7 +295,7 @@ class viz:
         ):
             """Handle /point requests."""
             lon, lat = list(map(float, coordinates.split(",")))
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
@@ -255,13 +305,13 @@ class viz:
                 pts = src_dst.point(
                     lon,
                     lat,
-                    **layer_params,
-                    **dataset_params,
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
                 )
 
             return {
                 "coordinates": [lon, lat],
-                "values": pts.data.tolist(),
+                "values": pts.array.tolist(),
                 "band_names": pts.band_names,
             }
 
@@ -281,13 +331,11 @@ class viz:
             img_params: PreviewParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
             post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /preview requests."""
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
@@ -295,26 +343,20 @@ class viz:
                 self._update_params(src_dst, layer_params)
 
                 image = src_dst.preview(
-                    **layer_params,
-                    **dataset_params,
-                    **img_params,
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
+                    **img_params.as_dict(),
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if post_process:
                 image = post_process(image)
 
-            if rescale:
-                image.rescale(rescale)
-
-            if color_formula:
-                image.apply_color_formula(color_formula)
-
             content, media_type = render_image(
                 image,
                 output_format=format,
                 colormap=colormap or dst_colormap,
-                **render_params,
+                **render_params.as_dict(),
             )
 
             return Response(content, media_type=media_type)
@@ -353,13 +395,13 @@ class viz:
             img_params: PartFeatureParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
+            dst_crs=Depends(DstCRSParams),
+            coord_crs=Depends(CoordCRSParams),
             post_process=Depends(available_algorithms.dependency),
         ):
             """Create image from part of a dataset."""
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
@@ -368,26 +410,22 @@ class viz:
 
                 image = src_dst.part(
                     [minx, miny, maxx, maxy],
-                    **layer_params,
-                    **dataset_params,
-                    **img_params,
+                    dst_crs=dst_crs,
+                    bounds_crs=coord_crs or WGS84_CRS,
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
+                    **img_params.as_dict(),
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if post_process:
                 image = post_process(image)
 
-            if rescale:
-                image.rescale(rescale)
-
-            if color_formula:
-                image.apply_color_formula(color_formula)
-
             content, media_type = render_image(
                 image,
                 output_format=format,
                 colormap=colormap or dst_colormap,
-                **render_params,
+                **render_params.as_dict(),
             )
 
             return Response(content, media_type=media_type)
@@ -415,13 +453,11 @@ class viz:
             img_params: PartFeatureParams = Depends(),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
             post_process=Depends(available_algorithms.dependency),
         ):
             """Handle /feature requests."""
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
@@ -429,24 +465,20 @@ class viz:
                 self._update_params(src_dst, layer_params)
 
                 image = src_dst.feature(
-                    geom.model_dump(exclude_none=True), **layer_params, **dataset_params
+                    geom.model_dump(exclude_none=True),
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
                 )
                 dst_colormap = getattr(src_dst, "colormap", None)
 
             if post_process:
                 image = post_process(image)
 
-            if rescale:
-                image.rescale(rescale)
-
-            if color_formula:
-                image.apply_color_formula(color_formula)
-
             content, media_type = render_image(
                 image,
                 output_format=format,
                 colormap=colormap or dst_colormap,
-                **render_params,
+                **render_params.as_dict(),
             )
 
             return Response(content, media_type=media_type)
@@ -462,8 +494,12 @@ class viz:
             "description": "Read COG and return a tile",
         }
 
-        @self.router.get("/tiles/{z}/{x}/{y}", **tile_params, tags=["API"])
-        @self.router.get("/tiles/{z}/{x}/{y}.{format}", **tile_params, tags=["API"])
+        @self.router.get(
+            "/tiles/WebMercatorQuad/{z}/{x}/{y}", **tile_params, tags=["API"]
+        )
+        @self.router.get(
+            "/tiles/WebMercatorQuad/{z}/{x}/{y}.{format}", **tile_params, tags=["API"]
+        )
         def tile(
             z: Annotated[
                 int,
@@ -487,8 +523,7 @@ class viz:
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
+            tile_params: TileParams = Depends(),
             colormap: ColorMapParams = Depends(),
             feature_type: Annotated[
                 Optional[Literal["point", "polygon"]],
@@ -508,7 +543,7 @@ class viz:
 
             tilesize = tilesize or default_tilesize
 
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 if self.nodata is not None and dataset_params.nodata is None:
                     dataset_params.nodata = self.nodata
 
@@ -520,8 +555,9 @@ class viz:
                     y,
                     z,
                     tilesize=tilesize,
-                    **layer_params,
-                    **dataset_params,
+                    **tile_params.as_dict(),
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
                 )
 
                 dst_colormap = getattr(src_dst, "colormap", None)
@@ -554,17 +590,11 @@ class viz:
                 if post_process:
                     image = post_process(image)
 
-                if rescale:
-                    image.rescale(rescale)
-
-                if color_formula:
-                    image.apply_color_formula(color_formula)
-
                 content, media_type = render_image(
                     image,
                     output_format=format,
                     colormap=colormap or dst_colormap,
-                    **render_params,
+                    **render_params.as_dict(),
                 )
 
             return Response(content, media_type=media_type)
@@ -585,8 +615,6 @@ class viz:
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
             post_process=Depends(available_algorithms.dependency),
             feature_type: Annotated[
@@ -613,9 +641,13 @@ class viz:
             if qs:
                 tile_url += f"?{urllib.parse.urlencode(qs)}"
 
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 bounds = (
-                    self.bounds if self.bounds is not None else src_dst.geographic_bounds
+                    self.bounds
+                    if self.bounds is not None
+                    else src_dst.get_geographic_bounds(
+                        src_dst.tms.rasterio_geographic_crs
+                    )
                 )
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
@@ -641,8 +673,6 @@ class viz:
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
             post_process=Depends(available_algorithms.dependency),
             feature_type: Annotated[
@@ -673,9 +703,13 @@ class viz:
             if qs:
                 tiles_endpoint += f"?{urllib.parse.urlencode(qs)}"
 
-            with self.reader(self.src_path) as src_dst:  # type: ignore
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
                 bounds = (
-                    self.bounds if self.bounds is not None else src_dst.geographic_bounds
+                    self.bounds
+                    if self.bounds is not None
+                    else src_dst.get_geographic_bounds(
+                        src_dst.tms.rasterio_geographic_crs
+                    )
                 )
                 minzoom = self.minzoom if self.minzoom is not None else src_dst.minzoom
                 maxzoom = self.maxzoom if self.maxzoom is not None else src_dst.maxzoom
@@ -717,8 +751,6 @@ class viz:
             layer_params=Depends(self.layer_dependency),
             dataset_params: DatasetParams = Depends(),
             render_params: ImageRenderingParams = Depends(),
-            rescale: RescalingParams = Depends(),
-            color_formula: ColorFormulaParams = Depends(),
             colormap: ColorMapParams = Depends(),
             post_process=Depends(available_algorithms.dependency),
             tilesize: Annotated[
@@ -768,7 +800,7 @@ class viz:
                 context={
                     "tilejson_endpoint": str(request.url_for("tilejson")),
                     "stats_endpoint": str(request.url_for("statistics")),
-                    "info_endpoint": str(request.url_for("info")),
+                    "info_endpoint": str(request.url_for("info_geojson")),
                     "point_endpoint": str(request.url_for("point")),
                     "allow_3d": has_mvt,
                 },

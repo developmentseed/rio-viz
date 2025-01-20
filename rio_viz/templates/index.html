@@ -339,7 +339,8 @@ const dtype_ranges = {
   'uint32': [0, 4294967295],
   'int32': [-2147483648, 2147483647],
   'float32': [-3.4028235e+38, 3.4028235e+38],
-  'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308]
+  'float64': [-1.7976931348623157e+308, 1.7976931348623157e+308],
+  'complex_int16': [-32768, 32767]
 }
 
 if ('{{ allow_3d }}' !== "True") {
@@ -987,62 +988,6 @@ const switchPane = (event) => {
   switchViz()
 }
 
-const bboxPolygon = (bounds) => {
-    return {
-        'type': 'Feature',
-        'geometry': {
-            'type': 'Polygon',
-            'coordinates': [[
-                [bounds[0], bounds[1]],
-                [bounds[2], bounds[1]],
-                [bounds[2], bounds[3]],
-                [bounds[0], bounds[3]],
-                [bounds[0], bounds[1]]
-            ]]
-        },
-        'properties': {}
-    }
-}
-
-const addAOI = (bounds) => {
-  if (map.getLayer('aoi-polygon')) map.removeLayer('aoi-polygon')
-  if (map.getSource('aoi')) map.removeSource('aoi')
-  if (bounds[0] > bounds[2]) {
-    map.addSource('aoi', {
-      'type': 'geojson',
-      'data': {
-        "type": "FeatureCollection",
-        "features": [
-          bboxPolygon([-180, bounds[1], bounds[2], bounds[3]]),
-          bboxPolygon([bounds[0], bounds[1], 180, bounds[3]]),
-        ]
-      }
-    })
-  } else {
-    map.addSource('aoi', {
-      'type': 'geojson',
-      'data': {
-        "type": "FeatureCollection",
-        "features": [bboxPolygon(bounds)]
-      }
-    })
-  }
-
-  map.addLayer({
-    id: 'aoi-polygon',
-    type: 'line',
-    source: 'aoi',
-    layout: {
-      'line-cap': 'round',
-      'line-join': 'round'
-    },
-    paint: {
-      'line-color': '#3bb2d0',
-      'line-width': 1
-    }
-  })
-  return
-}
 
 map.on('load', () => {
   map.on('mousemove', (e) => {
@@ -1128,9 +1073,8 @@ map.on('load', () => {
     })
     .then(data => {
       console.log(data)
-      scope.data_type = data.dtype
-      scope.colormap = data.colormap
-      scope.bounds = data.bounds
+      scope.data_type = data.properties.dtype
+      scope.colormap = data.properties.colormap
 
       if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) document.getElementById('minmax-data').classList.remove('none')
 
@@ -1138,8 +1082,8 @@ map.on('load', () => {
       document.getElementById('data-min').value = mm[0]
       document.getElementById('data-max').value = mm[1]
 
-      scope.band_descriptions = data.band_descriptions
-      const band_descr = data.band_descriptions
+      scope.band_descriptions = data.properties.band_descriptions
+      const band_descr = data.properties.band_descriptions
       const nbands = band_descr.length
 
       //Populate Band (1b) selector
@@ -1192,16 +1136,24 @@ map.on('load', () => {
       document.getElementById('hide-arrow').classList.toggle('off')
       document.getElementById('menu').classList.toggle('off')
 
-      let bounds = [...data.bounds]
+      let bounds = [...data.bbox]
+      scope.bounds = bounds
+
       // Bounds crossing dateline
       if (bounds[0] > bounds[2]) {
-        scope.crossing_dateline = true
         bounds[0] = bounds[0] - 360
+        scope.crossing_dateline = true
       }
-      map.fitBounds(
-        [[bounds[0], bounds[1]], [bounds[2], bounds[3]]]
-      )
-      addAOI(data.bounds)
+
+      map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]])
+      map.addSource('aoi', {'type': 'geojson', 'data': data})
+      map.addLayer({
+        id: 'aoi-polygon',
+        type: 'line',
+        source: 'aoi',
+        layout: {'line-cap': 'round', 'line-join': 'round'},
+        paint: {'line-color': '#3bb2d0', 'line-width': 1}
+      })
 
       if (nbands === 1) {
         document.getElementById('3b').classList.add('disabled')

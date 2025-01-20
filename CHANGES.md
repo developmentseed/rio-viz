@@ -1,3 +1,8 @@
+# 0.13.0 (2025-01-20)
+
+* update titiler dependency to `>=0.20,<0.21`
+* remove docker image publishing
+
 # 0.12.2 (2024-04-24)
 
 * update titiler dependency to `>=0.16,<0.19`

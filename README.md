@@ -169,25 +169,6 @@ rio-viz supports Mapbox VectorTiles encoding from a raster array. This feature w
 
 ![](https://user-images.githubusercontent.com/10407788/56853984-4713b800-68fd-11e9-86a2-efbb041daeb0.gif)
 
-## Docker
-
-Ready to use docker image can be found on Github registry.
-
-- https://github.com/developmentseed/rio-viz/pkgs/container/rio-viz
-
-```bash
-docker run \
-  --volume "$PWD":/data \
-  --platform linux/amd64 \
-  --rm -it -p 8080:8080 ghcr.io/developmentseed/rio-viz:latest \
-  rio viz --host 0.0.0.0 /data/your-file.tif
-```
-
-Notes:
-- `--platform linux/amd64` is only needed if you are using latest MacOS M1 machines
-- `--volume "$PWD":/data` is needed to mount your local directory to the docker image
-- rio-viz's option `--host 0.0.0.0` is required to access the web server
-
 ## Contribution & Development
 
 See [CONTRIBUTING.md](https://github.com/developmentseed/rio-viz/blob/main/CONTRIBUTING.md)

@@ -16,6 +16,34 @@ from rio_tiler.io import BaseReader, COGReader, MultiBandReader, MultiBaseReader
 from rio_viz import app
 
 
+def options_to_dict(ctx, param, value):
+    """
+    click callback to validate `--opt KEY1=VAL1 --opt KEY2=VAL2` and collect
+    in a dictionary like the one below, which is what the CLI function receives.
+    If no value or `None` is received then an empty dictionary is returned.
+
+        {
+            'KEY1': 'VAL1',
+            'KEY2': 'VAL2'
+        }
+
+    Note: `==VAL` breaks this as `str.split('=', 1)` is used.
+    """
+
+    if not value:
+        return {}
+    else:
+        out = {}
+        for pair in value:
+            if "=" not in pair:
+                raise click.BadParameter(f"Invalid syntax for KEY=VAL arg: {pair}")
+            else:
+                k, v = pair.split("=", 1)
+                out[k] = v
+
+        return out
+
+
 @contextmanager
 def TemporaryRasterFile(suffix=".tif"):
     """Create temporary file."""
@@ -98,6 +126,15 @@ class NodataParamType(click.ParamType):
     callback=options._cb_key_val,
     help="GDAL configuration options.",
 )
+@click.option(
+    "--reader-params",
+    "-p",
+    "reader_params",
+    metavar="NAME=VALUE",
+    multiple=True,
+    callback=options_to_dict,
+    help="Reader Options.",
+)
 def viz(
     src_path,
     nodata,
@@ -110,6 +147,7 @@ def viz(
     layers,
     server_only,
     config,
+    reader_params,
 ):
     """Rasterio Viz cli."""
     if reader:
@@ -141,6 +179,7 @@ def viz(
         application = app.viz(
             src_path=src_path,
             reader=dataset_reader,
+            reader_params=reader_params,
             port=port,
             host=host,
             config=config,

@@ -40,7 +40,7 @@ class MosaicReader(BaseReader):
         self.maxzoom = max([cog.maxzoom for cog in self.datasets.values()])
 
         self.crs = WGS84_CRS
-        bounds = [cog.geographic_bounds for cog in self.datasets.values()]
+        bounds = [cog.get_geographic_bounds(WGS84_CRS) for cog in self.datasets.values()]
         minx, miny, maxx, maxy = zip(*bounds)
         self.bounds = [min(minx), min(miny), max(maxx), max(maxy)]
 
