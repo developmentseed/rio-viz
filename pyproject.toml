@@ -101,3 +101,17 @@ ignore = [
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12
+
+[tool.bumpversion]
+current_version = "0.12.2"
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+tag = true
+commit = true
+tag_name = "{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "rio_viz/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
