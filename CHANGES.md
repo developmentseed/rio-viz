@@ -1,3 +1,7 @@
+# 0.13.1 (2025-03-19)
+
+* relaxe titiler requirement to `>=0.20,<0.22`
+
 # 0.13.0 (2025-01-20)
 
 * remove python 3.8 support
