@@ -1,3 +1,7 @@
+# 0.14.0 (2025-03-20)
+
+* add `--geojson` option to add a GeoJSON Feature or FeatureCollection on the map viewer
+
 # 0.13.1 (2025-03-19)
 
 * relaxe titiler requirement to `>=0.20,<0.22`
