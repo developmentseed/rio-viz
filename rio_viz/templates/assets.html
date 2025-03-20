@@ -365,6 +365,21 @@ map.on('zoom', function (e) {
     document.getElementById('zoom').textContent = z
 })
 
+const add_geojson = () => {
+  if (map.getSource('geojson')) map.removeSource('geojson')
+  if (map.getLayer('geojson')) map.removeLayer('geojson')
+  if ({{ geojson }} !== undefined) {
+    map.addSource('geojson', {'type': 'geojson', 'data': {{ geojson|safe }}})
+    map.addLayer({
+      id: 'geojson',
+      type: 'line',
+      source: 'geojson',
+      layout: {'line-cap': 'round', 'line-join': 'round'},
+      paint: {'line-color': '#FF0000', 'line-width': 4}
+    })
+  }
+}
+
 const add_raster = (tilejson) => {
   if (map.getLayer('raster-l')) map.removeLayer('raster-l')
   if (map.getSource('raster-l')) map.removeSource('raster-l')
@@ -442,6 +457,9 @@ const set1bViz = () => {
         document.getElementById('loader').classList.add('off')
         if (scope.metadata) addHisto1Band()
       })
+      .then(() => {
+        add_geojson()
+      })
       .catch(err => {
         console.warn(err)
       })
@@ -484,6 +502,9 @@ const set3bViz = () => {
         add_raster(data)
         document.getElementById('loader').classList.add('off')
         if (scope.metadata) addHisto3Bands()
+      })
+      .then(() => {
+        add_geojson()
       })
       .catch(err => {
         console.warn(err)
@@ -711,6 +732,10 @@ const switchViz = () => {
     if (map.getSource('raster-r')) map.removeSource('raster-r')
     if (map.getLayer('raster')) map.removeLayer('raster')
     if (map.getSource('raster')) map.removeSource('raster')
+
+    // remove GeoJSON layers/sources
+    if (map.getSource('geojson')) map.removeSource('geojson')
+    if (map.getLayer('geojson')) map.removeLayer('geojson')
 
     const rasterType = document.getElementById('toolbar').querySelector(".active").id
     switch (rasterType) {

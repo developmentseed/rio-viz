@@ -1,6 +1,7 @@
 """rio_viz.cli."""
 
 import importlib
+import json
 import os
 import tempfile
 import warnings
@@ -135,6 +136,11 @@ class NodataParamType(click.ParamType):
     callback=options_to_dict,
     help="Reader Options.",
 )
+@click.option(
+    "--geojson",
+    type=click.File(mode="r"),
+    help="GeoJSON Feature or FeatureCollection path to display on viewer.",
+)
 def viz(
     src_path,
     nodata,
@@ -148,6 +154,7 @@ def viz(
     server_only,
     config,
     reader_params,
+    geojson,
 ):
     """Rasterio Viz cli."""
     if reader:
@@ -187,6 +194,7 @@ def viz(
             maxzoom=maxzoom,
             nodata=nodata,
             layers=layers,
+            geojson=json.load(geojson) if geojson else None,
         )
         if not server_only:
             click.echo(f"Viewer started at {application.template_url}", err=True)

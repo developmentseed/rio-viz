@@ -380,6 +380,21 @@ map.on('zoom', function (e) {
   document.getElementById('zoom').textContent = z
 })
 
+const add_geojson = () => {
+  if (map.getSource('geojson')) map.removeSource('geojson')
+  if (map.getLayer('geojson')) map.removeLayer('geojson')
+  if ({{ geojson }} !== undefined) {
+    map.addSource('geojson', {'type': 'geojson', 'data': {{ geojson|safe }}})
+    map.addLayer({
+      id: 'geojson',
+      type: 'line',
+      source: 'geojson',
+      layout: {'line-cap': 'round', 'line-join': 'round'},
+      paint: {'line-color': '#FF0000', 'line-width': 4}
+    })
+  }
+}
+
 const add_raster = (tilejson) => {
   if (map.getLayer('raster-l')) map.removeLayer('raster-l')
   if (map.getSource('raster-l')) map.removeSource('raster-l')
@@ -586,6 +601,9 @@ const set1bViz = () => {
         .then(data => {
           add_raster(data)
         })
+        .then(() => {
+          add_geojson()
+        })
         .catch(err => {
           console.warn(err)
         })
@@ -601,6 +619,9 @@ const set1bViz = () => {
           add_vector_source(data)
           add_vector_layer(vizType)
         })
+        .then(() => {
+          add_geojson()
+        })
         .catch(err => {
           console.warn(err)
         })
@@ -615,6 +636,9 @@ const set1bViz = () => {
         .then(data => {
           add_vector_source(data)
           add_vector_layer(vizType)
+        })
+        .then(() => {
+          add_geojson()
         })
         .catch(err => {
           console.warn(err)
@@ -654,6 +678,9 @@ const set3bViz = () => {
       add_raster(data)
       if (scope.dataset_statistics) addHisto3Bands()
     })
+    .then(() => {
+      add_geojson()
+    })
     .catch(err => {
       console.warn(err)
     })
@@ -675,6 +702,10 @@ const switchViz = () => {
   if (map.getSource('vector-r')) map.removeSource('vector-r')
   if (map.getLayer('vector')) map.removeLayer('vector')
   if (map.getSource('vector')) map.removeSource('vector')
+
+  // remove GeoJSON layers/sources
+  if (map.getSource('geojson')) map.removeSource('geojson')
+  if (map.getLayer('geojson')) map.removeLayer('geojson')
 
   const rasterType = document.getElementById('toolbar').querySelector(".active").id
   switch (rasterType) {
@@ -948,6 +979,7 @@ const updateViz = () => {
     switchViz()
   } else {
     add_vector_layer(newViz)
+    add_geojson()
     if (scope.dataset_statistics) addHisto1Band()
   }
 }

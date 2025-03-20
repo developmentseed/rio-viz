@@ -93,6 +93,8 @@ class viz:
     layers: Optional[List[str]] = attr.ib(default=None)
     nodata: Optional[Union[str, int, float]] = attr.ib(default=None)
 
+    geojson: Optional[Dict] = attr.ib(default=None)
+
     # cog / bands / assets
     reader_type: str = attr.ib(init=False)
 
@@ -803,6 +805,7 @@ class viz:
                     "info_endpoint": str(request.url_for("info_geojson")),
                     "point_endpoint": str(request.url_for("point")),
                     "allow_3d": has_mvt,
+                    "geojson": self.geojson,
                 },
                 media_type="text/html",
             )
