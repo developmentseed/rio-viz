@@ -155,7 +155,7 @@ class viz:
             allow_methods=["GET"],
             allow_headers=["*"],
         )
-        self.app.add_middleware(CacheControlMiddleware, cachecontrol="no-cache")
+        self.app.add_middleware(CacheControlMiddleware, cachecontrol="no-store")
 
     def _update_params(self, src_dst, options: Type[DefaultDependency]):
         """Create Reader options."""
@@ -796,19 +796,28 @@ class viz:
             elif self.reader_type == "assets":
                 name = "assets.html"
 
-            return templates.TemplateResponse(
-                request,
-                name=name,
-                context={
-                    "tilejson_endpoint": str(request.url_for("tilejson")),
-                    "stats_endpoint": str(request.url_for("statistics")),
-                    "info_endpoint": str(request.url_for("info_geojson")),
-                    "point_endpoint": str(request.url_for("point")),
-                    "allow_3d": has_mvt,
-                    "geojson": self.geojson,
-                },
-                media_type="text/html",
-            )
+            with self.reader(self.src_path, **self.reader_params) as src_dst:  # type: ignore
+                return templates.TemplateResponse(
+                    request,
+                    name=name,
+                    context={
+                        "tiles_endpoint": str(
+                            request.url_for("tile", z="{z}", x="{x}", y="{y}")
+                        ),
+                        "stats_endpoint": str(request.url_for("statistics")),
+                        "info_endpoint": str(request.url_for("info_geojson")),
+                        "point_endpoint": str(request.url_for("point")),
+                        "minzoom": self.minzoom
+                        if self.minzoom is not None
+                        else src_dst.minzoom,
+                        "maxzoom": self.maxzoom
+                        if self.maxzoom is not None
+                        else src_dst.maxzoom,
+                        "allow_3d": has_mvt,
+                        "geojson": self.geojson or "undefined",
+                    },
+                    media_type="text/html",
+                )
 
     @property
     def endpoint(self) -> str:
