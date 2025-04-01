@@ -4,8 +4,8 @@
         <meta charset='utf-8' />
         <title>Rio Viz</title>
         <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
-        <script src='https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js'></script>
-        <link href='https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css' rel='stylesheet' />
+        <script src='https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.js'></script>
+        <link href='https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.css' rel='stylesheet' />
 
         <link href='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.min.css' rel='stylesheet'>
         <script src='https://api.mapbox.com/mapbox-assembly/v0.23.2/assembly.js'></script>
@@ -190,6 +190,9 @@
         <li id='1b' class="col col--4" title="band" onclick="switchPane(this)">
           <svg class='icon icon--l inline-block'><use xlink:href='#icon-minus'/></svg>
         </li>
+        <li id='dem' class="col col--4" title="band" onclick="switchPane(this)">
+          <svg class='icon icon--l inline-block'><use xlink:href='#icon-mountain'/></svg>
+        </li>
       </ul>
 
       <div id='menu-content' class='relative'>
@@ -276,8 +279,19 @@
           </div>
         </section>
 
+        <!-- Raster-Dem Selection -->
+        <section id='dem-section' class='px6 py6'>
+          <div class='txt-h5 mb6 color-black'>
+            <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers
+          </div>
+          <div class='select-container wmax-full'>
+            <select id='layer-selector-dem' class='select select--s select--stroke wmax-full color-black'></select>
+            <div class='select-arrow color-black'></div>
+          </div>
+        </section>
+
         <!-- Min/Max -->
-        <div id="minmax-data" class='px6 py6 none'>
+        <div id="rescale-section" class='px6 py6 none'>
           <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-smooth-ramp'/></svg> Rescale</div>
           <input id="data-min" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
           <input id="data-max" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
@@ -292,7 +306,7 @@
         </div>
 
         <!-- Histogram -->
-        <div class='px6 py6 w-full'>
+        <div id='histogram-section' class='px6 py6 w-full'>
           <div class='txt-h5 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
           <div id='fetch-stats-div' class='w-full align-center'>
             <button id="btn-stats" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black mx12 my12'>Get Dataset Statistics</button>
@@ -326,7 +340,7 @@ var scope = {
   crossing_dateline: false,
 }
 
-const tilejson_endpoint = '{{ tilejson_endpoint }}'
+const tiles_endpoint = '{{ tiles_endpoint }}'
 const info_endpoint = '{{ info_endpoint }}'
 const stats_endpoint = '{{ stats_endpoint }}'
 const point_endpoint = '{{ point_endpoint }}'
@@ -396,24 +410,26 @@ const add_geojson = () => {
   }
 }
 
-const add_raster = (tilejson) => {
+const add_raster = (params) => {
   if (map.getLayer('raster-l')) map.removeLayer('raster-l')
   if (map.getSource('raster-l')) map.removeSource('raster-l')
   if (map.getLayer('raster-r')) map.removeLayer('raster-r')
   if (map.getSource('raster-r')) map.removeSource('raster-r')
   if (map.getLayer('raster')) map.removeLayer('raster')
   if (map.getSource('raster')) map.removeSource('raster')
+  if (map.getLayer('raster-dem')) map.removeLayer('raster-dem')
+  if (map.getSource('raster-dem')) map.removeSource('raster-dem')
 
-  let bounds = [...tilejson.bounds]
+  let bounds = [...scope.bounds]
   if (scope.crossing_dateline) {
     // 2 sources and 2 layers
     // left
     map.addSource('raster-l', {
       type: 'raster',
       bounds: [-180, bounds[1], bounds[2], bounds[3]],
-      minzoom: tilejson.minzoom,
-      maxzoom: tilejson.maxzoom,
-      tiles: tilejson.tiles,
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `?${params}`],
       tileSize: 256
     })
     map.addLayer({id: 'raster-l', type: 'raster', source: 'raster-l'})
@@ -422,9 +438,9 @@ const add_raster = (tilejson) => {
     map.addSource('raster-r', {
       type: 'raster',
       bounds: [bounds[0], bounds[1], 180, bounds[3]],
-      minzoom: tilejson.minzoom,
-      maxzoom: tilejson.maxzoom,
-      tiles: tilejson.tiles,
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `?${params}`],
       tileSize: 256
     })
     map.addLayer({id: 'raster-r', type: 'raster', source: 'raster-r'})
@@ -432,17 +448,92 @@ const add_raster = (tilejson) => {
   } else {
     map.addSource('raster', {
       type: 'raster',
-      bounds: tilejson.bounds,
-      minzoom: tilejson.minzoom,
-      maxzoom: tilejson.maxzoom,
-      tiles: tilejson.tiles,
+      bounds: scope.bounds,
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `?${params}`],
       tileSize: 256
     })
     map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
   }
 }
 
-const add_vector_source = (tilejson) => {
+const add_raster_dem = () => {
+  if (map.getLayer('raster-l')) map.removeLayer('raster-l')
+  if (map.getSource('raster-l')) map.removeSource('raster-l')
+  if (map.getLayer('raster-r')) map.removeLayer('raster-r')
+  if (map.getSource('raster-r')) map.removeSource('raster-r')
+  if (map.getLayer('raster')) map.removeLayer('raster')
+  if (map.getSource('raster')) map.removeSource('raster')
+  if (map.getLayer('raster-dem')) map.removeLayer('raster-dem')
+  if (map.getSource('raster-dem')) map.removeSource('raster-dem')
+
+  let params = {
+    algorithm: "hillshade",
+    buffer: 3
+  }
+  params.bidx = document.getElementById('layer-selector-dem').selectedOptions[0].getAttribute("bidx")
+
+  let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
+
+  // Hillshade
+  if (scope.crossing_dateline) {
+    // 2 sources and 2 layers
+    // left
+    map.addSource('raster-l', {
+      type: 'raster',
+      bounds: [-180, scope.bounds[1], scope.bounds[2], scope.bounds[3]],
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `?${url_params}`],
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster-l', type: 'raster', source: 'raster-l'})
+
+    //right
+    map.addSource('raster-r', {
+      type: 'raster',
+      bounds: [scope.bounds[0], scope.bounds[1], 180, scope.bounds[3]],
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `?${url_params}`],
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster-r', type: 'raster', source: 'raster-r'})
+
+  } else {
+    map.addSource('raster', {
+      type: 'raster',
+      bounds: scope.bounds,
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `?${url_params}`],
+      tileSize: 256
+    })
+    map.addLayer({id: 'raster', type: 'raster', source: 'raster'})
+  }
+
+  params = {
+    algorithm: "terrainrgb",
+    format: "png",
+    //algorithm_params: JSON.stringify({nodata_height:-10000.0})
+  }
+  params.bidx = document.getElementById('layer-selector-dem').selectedOptions[0].getAttribute("bidx")
+
+  url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
+
+  map.addSource('raster-dem', {
+    type: 'raster-dem',
+    bounds: scope.bounds,
+    minzoom: {{ minzoom }},
+    maxzoom: {{ maxzoom }},
+    tiles: [tiles_endpoint + `?${url_params}`],
+    tileSize: 256
+  })
+  map.setTerrain({'source': 'raster-dem', 'exaggeration': 5. });
+}
+
+const add_vector_source = (params) => {
   if (map.getLayer('vector-l')) map.removeLayer('vector-l')
   if (map.getLayer('vector-r')) map.removeLayer('vector-r')
   if (map.getSource('vector-l')) map.removeSource('vector-l')
@@ -450,34 +541,33 @@ const add_vector_source = (tilejson) => {
   if (map.getLayer('vector')) map.removeLayer('vector')
   if (map.getSource('vector')) map.removeSource('vector')
 
-  let bounds = [...tilejson.bounds]
   if (scope.crossing_dateline) {
     // 2 sources and 2 layers
     // left
     map.addSource('vector-l', {
       type: 'vector',
-      bounds: [-180, bounds[1], bounds[2], bounds[3]],
-      minzoom: tilejson.minzoom,
-      maxzoom: tilejson.maxzoom,
-      tiles: tilejson.tiles,
+      bounds: [-180, scope.bounds[1], scope.bounds[2], scope.bounds[3]],
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `.pbf?${params}`],
     })
 
     //right
     map.addSource('vector-r', {
       type: 'vector',
-      bounds: [bounds[0], bounds[1], 180, bounds[3]],
-      minzoom: tilejson.minzoom,
-      maxzoom: tilejson.maxzoom,
-      tiles: tilejson.tiles,
+      bounds: [scope.bounds[0], scope.bounds[1], 180, scope.bounds[3]],
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `.pbf?${params}`],
     })
 
   } else {
     map.addSource('vector', {
       type: 'vector',
-      bounds: tilejson.bounds,
-      minzoom: tilejson.minzoom,
-      maxzoom: tilejson.maxzoom,
-      tiles: tilejson.tiles,
+      bounds: scope.bounds,
+      minzoom: {{ minzoom }},
+      maxzoom: {{ maxzoom }},
+      tiles: [tiles_endpoint + `.pbf?${params}`],
     })
   }
 }
@@ -574,7 +664,7 @@ const add_vector_layer = (layerType) => {
 }
 
 const set1bViz = () => {
-  params = {}
+  let params = {}
   const vizType = document.getElementById('viz-selector').querySelector("input[name='toggle-viz']:checked").value
   switch (vizType) {
     case 'raster':
@@ -588,58 +678,26 @@ const set1bViz = () => {
       const cmap = document.getElementById('colormap-selector')[document.getElementById('colormap-selector').selectedIndex]
       if (cmap.value !== 'b&w') params.colormap_name = cmap.value
 
-      const url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
-      let url = `${tilejson_endpoint}?${url_params}`
-      fetch(`${tilejson_endpoint}?${url_params}`)
-        .then(res => {
-          if (res.ok) return res.json()
-          throw new Error('Network response was not ok.');
-        })
-        .then(data => {
-          add_raster(data)
-        })
-        .then(() => {
-          add_geojson()
-        })
-        .catch(err => {
-          console.warn(err)
-        })
+      add_raster(Object.keys(params).map(i => `${i}=${params[i]}`).join('&'))
+      add_geojson()
       break
 
     case 'point':
-      fetch(`${tilejson_endpoint}?tile_format=pbf&feature_type=point`)
-        .then(res => {
-          if (res.ok) return res.json()
-          throw new Error('Network response was not ok.');
-        })
-        .then(data => {
-          add_vector_source(data)
-          add_vector_layer(vizType)
-        })
-        .then(() => {
-          add_geojson()
-        })
-        .catch(err => {
-          console.warn(err)
-        })
+        params = {
+          feature_type: 'point'
+        }
+        add_vector_source(Object.keys(params).map(i => `${i}=${params[i]}`).join('&'))
+        add_vector_layer(vizType)
+        add_geojson()
       break
 
     case 'polygon':
-      fetch(`${tilejson_endpoint}?tile_format=pbf&feature_type=polygon`)
-        .then(res => {
-          if (res.ok) return res.json()
-          throw new Error('Network response was not ok.');
-        })
-        .then(data => {
-          add_vector_source(data)
-          add_vector_layer(vizType)
-        })
-        .then(() => {
-          add_geojson()
-        })
-        .catch(err => {
-          console.warn(err)
-        })
+        params = {
+          feature_type: 'polygon'
+        }
+        add_vector_source(Object.keys(params).map(i => `${i}=${params[i]}`).join('&'))
+        add_vector_layer(vizType)
+        add_geojson()
       break
 
     default:
@@ -666,21 +724,15 @@ const set3bViz = () => {
   if (url_params !== '') url_params = `${url_params}&`
 
   const indexes_params = [r, g, b].map(i => `bidx=${i}`).join('&')
-  fetch(`${tilejson_endpoint}?${url_params}${indexes_params}`)
-    .then(res => {
-      if (res.ok) return res.json()
-      throw new Error('Network response was not ok.');
-    })
-    .then(data => {
-      add_raster(data)
-      if (scope.dataset_statistics) addHisto3Bands()
-    })
-    .then(() => {
-      add_geojson()
-    })
-    .catch(err => {
-      console.warn(err)
-    })
+  add_raster(`${url_params}${indexes_params}`)
+  if (scope.dataset_statistics) addHisto3Bands()
+  add_geojson()
+
+}
+
+const setDemViz = () => {
+  add_raster_dem()
+  add_geojson()
 }
 
 const switchViz = () => {
@@ -691,6 +743,8 @@ const switchViz = () => {
   if (map.getSource('raster-r')) map.removeSource('raster-r')
   if (map.getLayer('raster')) map.removeLayer('raster')
   if (map.getSource('raster')) map.removeSource('raster')
+  if (map.getLayer('raster-dem')) map.removeLayer('raster-dem')
+  if (map.getSource('raster-dem')) map.removeSource('raster-dem')
 
   // remove MVT layers/sources
   if (map.getLayer('vector-l')) map.removeLayer('vector-l')
@@ -706,10 +760,19 @@ const switchViz = () => {
 
   const rasterType = document.getElementById('toolbar').querySelector(".active").id
   switch (rasterType) {
+    case 'dem':
+      document.getElementById('cformula-section').classList.add('none')
+      document.getElementById('rescale-section').classList.add('none')
+      setDemViz()
+      break
     case '1b':
+      document.getElementById('cformula-section').classList.remove('none')
+      document.getElementById('rescale-section').classList.remove('none')
       set1bViz()
       break
     case '3b':
+      document.getElementById('cformula-section').classList.remove('none')
+      document.getElementById('rescale-section').classList.remove('none')
       set3bViz()
       break
     default:
@@ -927,10 +990,10 @@ document.getElementById('btn-stats').addEventListener('click', () => {
     })
     .then(data => {
       scope.dataset_statistics = data
-      if (document.getElementById('toolbar').querySelector(".active").id === '1b') {
-        addHisto1Band()
-      } else {
+      if (document.getElementById('toolbar').querySelector(".active").id === '3b') {
         addHisto3Bands()
+      } else {
+        addHisto1Band()
       }
       document.getElementById('histogram').classList.remove('loading')
     })
@@ -983,6 +1046,11 @@ const updateViz = () => {
 
 document.getElementById('layer-selector').addEventListener('change', () => {
   const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  updateViz()
+})
+
+document.getElementById('layer-selector-dem').addEventListener('change', () => {
+  const active_layer = document.getElementById('layer-selector-dem')[document.getElementById('layer-selector-dem').selectedIndex]
   updateViz()
 })
 
@@ -1108,7 +1176,7 @@ map.on('load', () => {
       scope.data_type = data.properties.dtype
       scope.colormap = data.properties.colormap
 
-      if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) document.getElementById('minmax-data').classList.remove('none')
+      if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) document.getElementById('rescale-section').classList.remove('none')
 
       const mm = dtype_ranges[scope.data_type]
       document.getElementById('data-min').value = mm[0]
@@ -1116,41 +1184,50 @@ map.on('load', () => {
 
       scope.band_descriptions = data.properties.band_descriptions
       const band_descr = data.properties.band_descriptions
-      const nbands = band_descr.length
+      const valid_bidx = data.properties.colorinterp.map((e, i) => ( e !== 'alpha' ? i : undefined)).filter(x => x !== undefined);
 
       //Populate Band (1b) selector
       const layerList = document.getElementById('layer-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
         l.text = band_descr[i][1] || band_descr[i][0]
         layerList.appendChild(l)
-      }
+      })
+
+      const demLayerList = document.getElementById('layer-selector-dem')
+      valid_bidx.forEach((i) => {
+        let l = document.createElement('option')
+        l.setAttribute('bidx', i + 1)
+        l.setAttribute('bname', band_descr[i][0])
+        l.text = band_descr[i][1] || band_descr[i][0]
+        demLayerList.appendChild(l)
+      })
 
       // Populate R/G/B (3b) selectors
       const rList = document.getElementById('r-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
         l.text = band_descr[i][1] || band_descr[i][0]
         if (i === 0) l.selected="selected"
         rList.appendChild(l)
-      }
+      })
 
       const gList = document.getElementById('g-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
         l.text = band_descr[i][1] || band_descr[i][0]
         if (i === 1) l.selected="selected"
         gList.appendChild(l)
-      }
+      })
 
       const bList = document.getElementById('b-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
@@ -1161,7 +1238,7 @@ map.on('load', () => {
           l.selected="selected"
         }
         bList.appendChild(l)
-      }
+      })
 
       // remove loader
       document.getElementById('loader').classList.toggle('off')
@@ -1187,7 +1264,7 @@ map.on('load', () => {
         paint: {'line-color': '#3bb2d0', 'line-width': 1}
       })
 
-      if (nbands === 1) {
+      if (valid_bidx.length === 1) {
         document.getElementById('3b').classList.add('disabled')
         document.getElementById('3b').classList.remove('active')
         document.getElementById('3b-section').classList.toggle('active')
