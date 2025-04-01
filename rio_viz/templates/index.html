@@ -285,13 +285,13 @@
             <svg class='icon icon--l inline-block'><use xlink:href='#icon-layers'/></svg> Layers
           </div>
           <div class='select-container wmax-full'>
-            <select id='layer-selector' class='select select--s select--stroke wmax-full color-black'></select>
+            <select id='layer-selector-dem' class='select select--s select--stroke wmax-full color-black'></select>
             <div class='select-arrow color-black'></div>
           </div>
         </section>
 
         <!-- Min/Max -->
-        <div id="minmax-data" class='px6 py6 none'>
+        <div id="rescale-section" class='px6 py6 none'>
           <div class='txt-h5 mb6 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-smooth-ramp'/></svg> Rescale</div>
           <input id="data-min" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
           <input id="data-max" class='input input--s w120-ml w60 inline-block align-center color-black' value='0' />
@@ -306,7 +306,7 @@
         </div>
 
         <!-- Histogram -->
-        <div class='px6 py6 w-full'>
+        <div id='histogram-section' class='px6 py6 w-full'>
           <div class='txt-h5 color-black'><svg class='icon icon--l inline-block'><use xlink:href='#icon-graph'/></svg> Histogram</div>
           <div id='fetch-stats-div' class='w-full align-center'>
             <button id="btn-stats" class='btn bts--xs btn--stroke bg-darken25-on-hover inline-block txt-s color-black mx12 my12'>Get Dataset Statistics</button>
@@ -472,6 +472,8 @@ const add_raster_dem = () => {
     algorithm: "hillshade",
     buffer: 3
   }
+  params.bidx = document.getElementById('layer-selector-dem').selectedOptions[0].getAttribute("bidx")
+
   let url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
 
   // Hillshade
@@ -514,9 +516,10 @@ const add_raster_dem = () => {
   params = {
     algorithm: "terrainrgb",
     format: "png",
-    bidx: 1,
     //algorithm_params: JSON.stringify({nodata_height:-10000.0})
   }
+  params.bidx = document.getElementById('layer-selector-dem').selectedOptions[0].getAttribute("bidx")
+
   url_params = Object.keys(params).map(i => `${i}=${params[i]}`).join('&')
 
   map.addSource('raster-dem', {
@@ -758,12 +761,18 @@ const switchViz = () => {
   const rasterType = document.getElementById('toolbar').querySelector(".active").id
   switch (rasterType) {
     case 'dem':
+      document.getElementById('cformula-section').classList.add('none')
+      document.getElementById('rescale-section').classList.add('none')
       setDemViz()
       break
     case '1b':
+      document.getElementById('cformula-section').classList.remove('none')
+      document.getElementById('rescale-section').classList.remove('none')
       set1bViz()
       break
     case '3b':
+      document.getElementById('cformula-section').classList.remove('none')
+      document.getElementById('rescale-section').classList.remove('none')
       set3bViz()
       break
     default:
@@ -981,10 +990,10 @@ document.getElementById('btn-stats').addEventListener('click', () => {
     })
     .then(data => {
       scope.dataset_statistics = data
-      if (document.getElementById('toolbar').querySelector(".active").id === '1b') {
-        addHisto1Band()
-      } else {
+      if (document.getElementById('toolbar').querySelector(".active").id === '3b') {
         addHisto3Bands()
+      } else {
+        addHisto1Band()
       }
       document.getElementById('histogram').classList.remove('loading')
     })
@@ -1037,6 +1046,11 @@ const updateViz = () => {
 
 document.getElementById('layer-selector').addEventListener('change', () => {
   const active_layer = document.getElementById('layer-selector')[document.getElementById('layer-selector').selectedIndex]
+  updateViz()
+})
+
+document.getElementById('layer-selector-dem').addEventListener('change', () => {
+  const active_layer = document.getElementById('layer-selector-dem')[document.getElementById('layer-selector-dem').selectedIndex]
   updateViz()
 })
 
@@ -1162,7 +1176,7 @@ map.on('load', () => {
       scope.data_type = data.properties.dtype
       scope.colormap = data.properties.colormap
 
-      if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) document.getElementById('minmax-data').classList.remove('none')
+      if (['uint8','int8'].indexOf(scope.data_type) === -1 && !scope.colormap) document.getElementById('rescale-section').classList.remove('none')
 
       const mm = dtype_ranges[scope.data_type]
       document.getElementById('data-min').value = mm[0]
@@ -1170,41 +1184,50 @@ map.on('load', () => {
 
       scope.band_descriptions = data.properties.band_descriptions
       const band_descr = data.properties.band_descriptions
-      const nbands = band_descr.length
+      const valid_bidx = data.properties.colorinterp.map((e, i) => ( e !== 'alpha' ? i : undefined)).filter(x => x !== undefined);
 
       //Populate Band (1b) selector
       const layerList = document.getElementById('layer-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
         l.text = band_descr[i][1] || band_descr[i][0]
         layerList.appendChild(l)
-      }
+      })
+
+      const demLayerList = document.getElementById('layer-selector-dem')
+      valid_bidx.forEach((i) => {
+        let l = document.createElement('option')
+        l.setAttribute('bidx', i + 1)
+        l.setAttribute('bname', band_descr[i][0])
+        l.text = band_descr[i][1] || band_descr[i][0]
+        demLayerList.appendChild(l)
+      })
 
       // Populate R/G/B (3b) selectors
       const rList = document.getElementById('r-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
         l.text = band_descr[i][1] || band_descr[i][0]
         if (i === 0) l.selected="selected"
         rList.appendChild(l)
-      }
+      })
 
       const gList = document.getElementById('g-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
         l.text = band_descr[i][1] || band_descr[i][0]
         if (i === 1) l.selected="selected"
         gList.appendChild(l)
-      }
+      })
 
       const bList = document.getElementById('b-selector')
-      for (var i = 0; i < nbands; i++) {
+      valid_bidx.forEach((i) => {
         let l = document.createElement('option')
         l.setAttribute('bidx', i + 1)
         l.setAttribute('bname', band_descr[i][0])
@@ -1215,7 +1238,7 @@ map.on('load', () => {
           l.selected="selected"
         }
         bList.appendChild(l)
-      }
+      })
 
       // remove loader
       document.getElementById('loader').classList.toggle('off')
@@ -1241,7 +1264,7 @@ map.on('load', () => {
         paint: {'line-color': '#3bb2d0', 'line-width': 1}
       })
 
-      if (nbands === 1) {
+      if (valid_bidx.length === 1) {
         document.getElementById('3b').classList.add('disabled')
         document.getElementById('3b').classList.remove('active')
         document.getElementById('3b-section').classList.toggle('active')
